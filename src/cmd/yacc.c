@@ -2692,6 +2692,8 @@ callopt(void)
 		case ',':
 			continue;
 		case -1:
+			Bterm(finput);
+			remove(tempname);
 			break;
 		default:
 			error("bad tempfile");
@@ -2766,7 +2768,6 @@ callopt(void)
 	/* write out the output appropriate to the language */
 	aoutput();
 	osummary();
-	ZAPFILE(tempname);
 }
 
 void
