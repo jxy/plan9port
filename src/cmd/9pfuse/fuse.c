@@ -815,6 +815,8 @@ mountfuse(char *mtpt)
 			"/Support/load_osxfusefs"), 0) < 0 &&
 		   access((v="osxfuse", f="/Library/Filesystems/osxfuse.fs"
 			"/Contents/Resources/load_osxfuse"), 0) < 0 &&
+		   access((v="osxfuse", f="/opt/local/Library/Filesystems/osxfuse.fs"
+			"/Contents/Resources/load_osxfuse"), 0) < 0 &&
 		   access((v="fusefs", f="/System/Library/Extensions/fusefs.kext"
 			"/Contents/Resources/load_fusefs"), 0) < 0 &&
 		   access(f="/Library/Extensions/fusefs.kext"
@@ -877,6 +879,12 @@ mountfuse(char *mtpt)
 		putenv("MOUNT_OSXFUSE_DAEMON_PATH",
 			   "/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse");
 		execl("/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse",
+			  "mount_osxfuse", buf, mtpt, nil);
+
+		/*  OSXFUSE >=3.3  greater location from macports */
+		putenv("MOUNT_OSXFUSE_DAEMON_PATH",
+			   "/opt/local/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse");
+		execl("/opt/local/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse",
 			  "mount_osxfuse", buf, mtpt, nil);
 
 		/* Lion OSXFUSE location */
