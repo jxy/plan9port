@@ -630,8 +630,8 @@ rowload(Row *row, char *file, int initing)
 			}
 			textdelete(&row->tag, 0, row->tag.file->b.nc, TRUE);
 			textinsert(&row->tag, 0, r, nr, TRUE);
-			break;
 			free(r);
+			break;
 		default:
 			done = 1;
 			break;
