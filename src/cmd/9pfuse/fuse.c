@@ -884,11 +884,11 @@ mountfuse(char *mtpt)
 		execl("/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse",
 			  "mount_osxfuse", buf, mtpt, nil);
 
-		/*  OSXFUSE >=3.3  greater location from macports */
+		/* OSXFUSE >=3.3 from macports */
 		putenv("MOUNT_OSXFUSE_DAEMON_PATH",
-			   "/opt/local/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse");
+			"/opt/local/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse");
 		execl("/opt/local/Library/Filesystems/osxfuse.fs/Contents/Resources/mount_osxfuse",
-			  "mount_osxfuse", buf, mtpt, nil);
+			"mount_osxfuse", buf, mtpt, nil);
 
 		/* Lion OSXFUSE location */
 		putenv("MOUNT_FUSEFS_DAEMON_PATH",

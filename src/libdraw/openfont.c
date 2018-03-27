@@ -31,7 +31,7 @@ openfont1(Display *d, char *name)
 {
 	Font *fnt;
 	int fd, i, n, scale;
-	char *buf, *nambuf, *fname, *freename;
+	char *buf, *nambuf, *nambuf0, *fname, *freename;
 
 	nambuf = 0;
 	freename = nil;
@@ -42,7 +42,7 @@ openfont1(Display *d, char *name)
 		nambuf = smprint("#9/font/%s", fname+14);
 		if(nambuf == nil)
 			return 0;
-		char *nambuf0 = unsharp(nambuf);
+		*nambuf0 = unsharp(nambuf);
 		if(nambuf0 != nambuf)
 			free(nambuf);
 		nambuf = nambuf0;
