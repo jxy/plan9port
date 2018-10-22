@@ -16,5 +16,14 @@ void	servep9p(void);
 void	zlock(void);
 void	zunlock(void);
 
+void resizeimg(void);
+
 Rectangle mouserect;
-int	mouseresized;
+
+#if OSX_VERSION < 101400
+int mouseresized;
+#else
+#include<stdatomic.h>
+atomic_int mouseresized;
+void resizewindow(Rectangle);
+#endif
