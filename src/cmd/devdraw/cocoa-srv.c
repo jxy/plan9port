@@ -18,12 +18,13 @@ typedef struct Kbdbuf Kbdbuf;
 typedef struct Mousebuf Mousebuf;
 typedef struct Fdbuf Fdbuf;
 typedef struct Tagbuf Tagbuf;
-typedef struct KbdQueueItem KbdQueueItem;
-typedef struct KbdTagQueueItem KbdTagQueueItem;
 
-struct KbdQueueItem {
-  Rune r;
-  struct KbdQueueItem *next;
+struct Kbdbuf
+{
+	Rune r[32];
+	int ri;
+	int wi;
+	int stall;
 };
 
 struct Mousebuf
@@ -35,11 +36,6 @@ struct Mousebuf
 	int stall;
 };
 
-struct KbdTagQueueItem {
-  int t;
-  struct KbdTagQueueItem *next;
-};
-
 struct Tagbuf
 {
 	int t[32];
@@ -47,92 +43,9 @@ struct Tagbuf
 	int wi;
 };
 
-KbdQueueItem KbdQRoot;
-KbdQueueItem *KbdQRp = &KbdQRoot;
-KbdQueueItem *KbdQWp = &KbdQRoot;
-
-void
-putKbdQueue(Rune r)
-{
-  KbdQueueItem *ret;
-  ret = (struct KbdQueueItem*)malloc(sizeof(struct KbdQueueItem));
-  if (ret == NULL) {
-    sysfatal("Cant malloc KbdQueueItem");
-  }
-  ret->next = NULL;
-  ret->r = r;
-
-  KbdQWp->next = ret;
-  KbdQWp = ret;
-}
-
-int emptyKbdQueue() {
-  if (KbdQRp->next == NULL)
-    return 1;
-  return 0;
-}
-
-int
-popKbdQueue(Rune *r)
-{
-  KbdQueueItem *tmp;
-
-  if (KbdQRp->next == NULL)
-    return -1;
-
-  tmp = KbdQRp;
-  KbdQRp = KbdQRp->next;
-  *r = KbdQRp->r;
-
-  if (tmp != &KbdQRoot)
-    free(tmp);
-  return 0;
-}
-
+Kbdbuf kbd;
 Mousebuf mouse;
-
-KbdTagQueueItem KbdTQRoot;
-KbdTagQueueItem *KbdTQRp = &KbdTQRoot;
-KbdTagQueueItem *KbdTQWp = &KbdTQRoot;
-
-void
-putKbdTQueue(int t)
-{
-  KbdTagQueueItem *ret;
-  ret = (struct KbdTagQueueItem*)malloc(sizeof(struct KbdTagQueueItem));
-  if (ret == NULL) {
-    sysfatal("Cant malloc KbdQueueItem");
-  }
-  ret->next = NULL;
-  ret->t = t;
-
-  KbdTQWp->next = ret;
-  KbdTQWp = ret;
-}
-
-int emptyTKbdQueue() {
-  if (KbdTQRp->next == NULL)
-    return 1;
-  return 0;
-}
-
-int
-popKbdTQueue(int *t)
-{
-  KbdTagQueueItem *tmp;
-
-  if (KbdTQRp->next == NULL)
-    return -1;
-
-  tmp = KbdTQRp;
-  KbdTQRp = KbdTQRp->next;
-  *t = KbdTQRp->t;
-
-  if (tmp != &KbdTQRoot)
-    free(tmp);
-  return 0;
-}
-
+Tagbuf kbdtags;
 Tagbuf mousetags;
 
 void runmsg(Wsysmsg*);
@@ -233,7 +146,12 @@ runmsg(Wsysmsg *m)
 
 	case Trdkbd:
 		zlock();
-                putKbdTQueue(m->tag);
+		kbdtags.t[kbdtags.wi++] = m->tag;
+		if(kbdtags.wi == nelem(kbdtags.t))
+			kbdtags.wi = 0;
+		if(kbdtags.wi == kbdtags.ri)
+			sysfatal("too many queued keyboard reads");
+		kbd.stall = 0;
 		matchkbd();
 		zunlock();
 		break;
@@ -345,12 +263,19 @@ void
 matchkbd(void)
 {
 	Wsysmsg m;
-        while(!emptyKbdQueue() && !emptyTKbdQueue()) {
-          m.type = Rrdkbd;
-          popKbdTQueue(&m.tag);
-          popKbdQueue(&m.rune);
-          replymsg(&m);
-        }
+	
+	if(kbd.stall)
+		return;
+	while(kbd.ri != kbd.wi && kbdtags.ri != kbdtags.wi){
+		m.type = Rrdkbd;
+		m.tag = kbdtags.t[kbdtags.ri++];
+		if(kbdtags.ri == nelem(kbdtags.t))
+			kbdtags.ri = 0;
+		m.rune = kbd.r[kbd.ri++];
+		if(kbd.ri == nelem(kbd.r))
+			kbd.ri = 0;
+		replymsg(&m);
+	}
 }
 
 /*
@@ -424,7 +349,11 @@ void
 kputc(int c)
 {
 	zlock();
-    putKbdQueue(c);
+	kbd.r[kbd.wi++] = c;
+	if(kbd.wi == nelem(kbd.r))
+		kbd.wi = 0;
+	if(kbd.ri == kbd.wi)
+		kbd.stall = 1;
 	matchkbd();
 	zunlock();
 }

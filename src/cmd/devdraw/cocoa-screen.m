@@ -298,12 +298,7 @@ attachscreen(char *label, char *winsize)
 }
 
 @interface appwin : NSWindow @end
-@interface contentview : NSView <NSTextInputClient> {
-  NSRange _markedRange;
-  NSRange _selectedRange;
-  NSEvent *_keydownEvent;
-}
-@end
+@interface contentview : NSView @end
 
 @implementation appwin
 - (NSTimeInterval)animationResizeTime:(NSRect)r
@@ -743,137 +738,7 @@ static void getmouse(NSEvent*);
 static void gettouch(NSEvent*, int);
 static void updatecursor(void);
 
-static int keycvt[] =
-{
-	[QZ_IBOOK_ENTER] '\n',
-	[QZ_RETURN] '\n',
-	[QZ_ESCAPE] 27,
-	[QZ_BACKSPACE] '\b',
-	[QZ_LALT] Kalt,
-	[QZ_LCTRL] Kctl,
-	[QZ_LSHIFT] Kshift,
-	[QZ_F1] KF+1,
-	[QZ_F2] KF+2,
-	[QZ_F3] KF+3,
-	[QZ_F4] KF+4,
-	[QZ_F5] KF+5,
-	[QZ_F6] KF+6,
-	[QZ_F7] KF+7,
-	[QZ_F8] KF+8,
-	[QZ_F9] KF+9,
-	[QZ_F10] KF+10,
-	[QZ_F11] KF+11,
-	[QZ_F12] KF+12,
-	[QZ_INSERT] Kins,
-	[QZ_DELETE] 0x7F,
-	[QZ_HOME] Khome,
-	[QZ_END] Kend,
-	[QZ_KP_PLUS] '+',
-	[QZ_KP_MINUS] '-',
-	[QZ_TAB] '\t',
-	[QZ_PAGEUP] Kpgup,
-	[QZ_PAGEDOWN] Kpgdown,
-	[QZ_UP] Kup,
-	[QZ_DOWN] Kdown,
-	[QZ_LEFT] Kleft,
-	[QZ_RIGHT] Kright,
-	[QZ_KP_MULTIPLY] '*',
-	[QZ_KP_DIVIDE] '/',
-	[QZ_KP_ENTER] '\n',
-	[QZ_KP_PERIOD] '.',
-	[QZ_KP0] '0',
-	[QZ_KP1] '1',
-	[QZ_KP2] '2',
-	[QZ_KP3] '3',
-	[QZ_KP4] '4',
-	[QZ_KP5] '5',
-	[QZ_KP6] '6',
-	[QZ_KP7] '7',
-	[QZ_KP8] '8',
-	[QZ_KP9] '9',
-};
-static void interpretdeadkey(NSEvent *e);
-
-
 @implementation contentview
-static const NSRange kEmptyRange = {NSNotFound, 0};
-// ----------------------------------------------------------------
-// Helpers
-// ----------------------------------------------------------------
-- (void) removeMarkedText {
-  if (_markedRange.location != NSNotFound) {
-  	//Remove marked range by sending backspaces.
-    for(int i = 0; i < _markedRange.length; i++) {
-      keystroke('\b');
-    }
-    _markedRange = _selectedRange = kEmptyRange;
-  }
-}
-
-- (void) replaceCharactersInRange: (NSRange) aRange
-                         withText: (id) aString
-                   effectiveRange: (NSRangePointer) effectiveRange
-{
-  NSRange replacementRange = aRange;
-
-  int code;
-  int len = 0;
-  if ([aString isKindOfClass: [NSAttributedString class]]) {
-    len = [[aString string] length];
-  } else {
-    len = [aString length];
-  }
-  int i;
-  if (replacementRange.location == NSNotFound) {
-    replacementRange.location = 1;
-    replacementRange.length = 0;
-  }
-
-  //Remove old translation by sending backspaces.
-  for(int i = 0; i < aRange.length; i++) {
-    keystroke('\b');
-  }
-
-  //Send new translation.
-  if ([aString isKindOfClass: [NSAttributedString class]]) {
-    for(int i=0; i<len; i++) {
-      int c = [[aString string] characterAtIndex:i];
-      keystroke(c);
-    }
-  } else {
-    for(int i=0; i<len; i++) {
-      int c = [aString characterAtIndex:i];
-      keystroke(c);
-    }
-  }
-
-  if (effectiveRange != NULL) {
-    *effectiveRange = NSMakeRange(replacementRange.location, [aString length]);
-  }
-}
-
-/**
- * If there is no marked text, the current selection is replaced.
- * If there is no selection, the string is inserted at the insertion point.
- *
- * @param replacementRange The range to replace, computed from
- *                         the beginning of the marked text.
- */
-- (NSRange) replacementMarkedRange: (NSRange) replacementRange {
-  NSRange markedRange = _markedRange;
-
-  if (markedRange.location == NSNotFound) markedRange = _selectedRange;
-  if (replacementRange.location != NSNotFound) {
-    NSRange newRange = markedRange;
-    newRange.location += replacementRange.location;
-    newRange.length += replacementRange.length;
-    if (NSMaxRange(newRange) <= NSMaxRange(markedRange)) {
-      markedRange = newRange;
-    }
-  }
-
-  return markedRange;
-}
 /*
  * "drawRect" is called each time Cocoa needs an
  * image, and each time we call "display".  It is
@@ -910,7 +775,6 @@ static const NSRange kEmptyRange = {NSNotFound, 0};
 	[super initWithFrame:r];
 	[self setAcceptsTouchEvents:YES];
 	[self setHidden:YES];		/* to avoid early "drawRect" call */
-        _selectedRange = _markedRange = kEmptyRange;
 	return self;
 }
 - (void)setHidden:(BOOL)set
@@ -922,12 +786,7 @@ static const NSRange kEmptyRange = {NSNotFound, 0};
 - (void)cursorUpdate:(NSEvent*)e{ updatecursor();}
 
 - (void)mouseMoved:(NSEvent*)e{ getmouse(e);}
-- (void)mouseDown:(NSEvent*)e{
-  _selectedRange = kEmptyRange;
-  [self unmarkText];
-  [self.inputContext discardMarkedText];
-  getmouse(e);
-}
+- (void)mouseDown:(NSEvent*)e{ getmouse(e);}
 - (void)mouseDragged:(NSEvent*)e{ getmouse(e);}
 - (void)mouseUp:(NSEvent*)e{ getmouse(e);}
 - (void)otherMouseDown:(NSEvent*)e{ getmouse(e);}
@@ -938,161 +797,7 @@ static const NSRange kEmptyRange = {NSNotFound, 0};
 - (void)rightMouseUp:(NSEvent*)e{ getmouse(e);}
 - (void)scrollWheel:(NSEvent*)e{ getmouse(e);}
 
-- (void)doCommandBySelector:(SEL)aSelector {
-  LOG(@"Do command by selector: %@", NSStringFromSelector(aSelector));
-  NSString *s;
-  char c;
-  int k, m;
-  uint code;
-  m = [_keydownEvent modifierFlags];
-  switch([_keydownEvent type]) {
-    case NSKeyDown:
-      s = [_keydownEvent characters];
-      c = [s UTF8String][0];
-      if(m & NSCommandKeyMask){
-        if(' '<=c && c<='~')
-          keystroke(Kcmd+c);
-        break;
-      }
-      k = c;
-      code = [_keydownEvent keyCode];
-      if(code<nelem(keycvt) && keycvt[code]) {
-        k = keycvt[code];
-      }
-      if(k==0)
-        break;
-      if(k>0) {
-        keystroke(k);
-      } else {
-        LOG(@"k < 0: %d, keystroke: %c", [s characterAtIndex: 0]);
-        //[self interpretKeyEvents: [NSArray arrayWithObject: e]];
-        keystroke([s characterAtIndex:0]);
-      }
-      break;
-    default:
-      break;
-  }
-}
-
-
-- (void)keyDown:(NSEvent*)e{
-  //getkeyboard(e);
-  LOG(@"keydown called");
-  NSString *s;
-  char c;
-  int k, m;
-  uint code;
-  m = [e modifierFlags];
-  switch([e type]) {
-    case NSKeyDown:
-      _keydownEvent = e;
-      BOOL inputMethodIsInserting = [self.inputContext handleEvent: e];
-      if (!inputMethodIsInserting && ![self hasMarkedText]) {
-        keystroke(k);
-      }
-      break;
-    default:
-      break;
-  }
-}
-
-- (void) deleteBackward: (id) sender {
-  // const NSUInteger length = [_text length];
-  LOG(@"NSResponder deleteBackward");
-  keystroke('\b');
-}
-
-- (void) deleteForward: (id) sender {
-  LOG(@"NSResponder deleteForward");
-  keystroke(0x7f);
-}
-
-- (void) insertNewline: (id) sender {
-  LOG(@"NSResponder insertNewline");
-  keystroke('\n');
-}
-
-- (void) insertTab: (id) sender {
-  LOG(@"NSResponder insertTab");
-  keystroke('\t');
-}
-
-- (void) insertText: (id) aString
-   replacementRange: (NSRange) replacementRange
-{
-  int code;
-  int len = [(NSString *)aString length];
-  int i;
-
-  LOG(@"NSResponder insertText '%@'\tlen = %d replacementRange: %@", aString, len, NSStringFromRange(replacementRange));
-
-  [self removeMarkedText];
-  [self replaceCharactersInRange: replacementRange
-                        withText: aString
-                  effectiveRange: NULL];
-  [self setNeedsDisplay: YES];
-}
-
-- (void) setMarkedText: (id) aString
-         selectedRange: (NSRange) selectedRange
-      replacementRange: (NSRange) replacementRange
-{
-  NSRange effectiveRange;
-
-  LOG(@"setMarkedText: %@", NSStringFromRange(replacementRange));
-
-  [self replaceCharactersInRange: [self replacementMarkedRange: replacementRange]
-                        withText: aString
-                  effectiveRange: &effectiveRange];
-
-  if (selectedRange.location != NSNotFound) selectedRange.location += effectiveRange.location;
-  _selectedRange = selectedRange;
-  _markedRange = effectiveRange;
-  if ([aString length] == 0) [self removeMarkedText];
-  [self setNeedsDisplay: YES];
-}
-
-- (NSAttributedString *) attributedSubstringForProposedRange: (NSRange) aRange
-                                                 actualRange: (NSRangePointer) actualRange
-{
-  return [[[NSAttributedString alloc] init] autorelease];
-}
-
-- (NSUInteger) characterIndexForPoint: (NSPoint) thePoint {
-  return 0;
-}
-
-- (NSRect) firstRectForCharacterRange: (NSRange) aRange
-                          actualRange: (NSRangePointer) actualRange
-{
-	NSRect viewRect = [WIN convertRectToScreen:self.frame];
-	return NSMakeRect(NSMinX(viewRect), NSMinY(viewRect), 0, 0);
-}
-
-- (NSAttributedString *) attributedString {
-	return NULL;
-}
-
-- (void) unmarkText {
-    _markedRange = NSMakeRange(NSNotFound, 0);
-}
-
-- (BOOL) hasMarkedText {
-    return _markedRange.location != NSNotFound;
-}
-
-- (NSRange) markedRange {
-  return _markedRange;
-}
-
-- (NSRange) selectedRange {
-  return _selectedRange;
-}
-
-- (NSArray *) validAttributesForMarkedText {
-    return [NSArray array];
-}
-
+- (void)keyDown:(NSEvent*)e{ getkeyboard(e);}
 - (void)flagsChanged:(NSEvent*)e{ getkeyboard(e);}
 
 - (void)magnifyWithEvent:(NSEvent*)e{ getgesture(e);}
@@ -1114,6 +819,56 @@ static const NSRange kEmptyRange = {NSNotFound, 0};
 	gettouch(e, NSTouchPhaseCancelled);
 }
 @end
+
+static int keycvt[] =
+{
+	[QZ_IBOOK_ENTER]= '\n',
+	[QZ_RETURN]= '\n',
+	[QZ_ESCAPE]= 27,
+	[QZ_BACKSPACE]= '\b',
+	[QZ_LALT]= Kalt,
+	[QZ_LCTRL]= Kctl,
+	[QZ_LSHIFT]= Kshift,
+	[QZ_F1]= KF+1,
+	[QZ_F2]= KF+2,
+	[QZ_F3]= KF+3,
+	[QZ_F4]= KF+4,
+	[QZ_F5]= KF+5,
+	[QZ_F6]= KF+6,
+	[QZ_F7]= KF+7,
+	[QZ_F8]= KF+8,
+	[QZ_F9]= KF+9,
+	[QZ_F10]= KF+10,
+	[QZ_F11]= KF+11,
+	[QZ_F12]= KF+12,
+	[QZ_INSERT]= Kins,
+	[QZ_DELETE]= 0x7F,
+	[QZ_HOME]= Khome,
+	[QZ_END]= Kend,
+	[QZ_KP_PLUS]= '+',
+	[QZ_KP_MINUS]= '-',
+	[QZ_TAB]= '\t',
+	[QZ_PAGEUP]= Kpgup,
+	[QZ_PAGEDOWN]= Kpgdown,
+	[QZ_UP]= Kup,
+	[QZ_DOWN]= Kdown,
+	[QZ_LEFT]= Kleft,
+	[QZ_RIGHT]= Kright,
+	[QZ_KP_MULTIPLY]= '*',
+	[QZ_KP_DIVIDE]= '/',
+	[QZ_KP_ENTER]= '\n',
+	[QZ_KP_PERIOD]= '.',
+	[QZ_KP0]= '0',
+	[QZ_KP1]= '1',
+	[QZ_KP2]= '2',
+	[QZ_KP3]= '3',
+	[QZ_KP4]= '4',
+	[QZ_KP5]= '5',
+	[QZ_KP6]= '6',
+	[QZ_KP7]= '7',
+	[QZ_KP8]= '8',
+	[QZ_KP9]= '9',
+};
 
 @interface apptext : NSTextView @end
 
