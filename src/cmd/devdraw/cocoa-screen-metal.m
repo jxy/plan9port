@@ -48,24 +48,14 @@ usage(void)
 + (void)callsetNeedsDisplayInRect:(NSValue *)v;
 + (void)callsetcursor:(NSValue *)v;
 @end
-@interface DevDrawView : NSView<NSTextInputClient>{
-	NSMutableString *_tmpText;
-	NSRange _markedRange;
-	NSRange _selectedRange;
-	NSRect _lastInputRect;	// The view is flipped, this is not.
-	BOOL _tapping;
-	NSUInteger _tapFingers;
-	NSUInteger _tapTime;
-}
+@interface DevDrawView : NSView<NSTextInputClient>
 - (void)clearInput;
 - (void)getmouse:(NSEvent *)e;
 - (void)sendmouse:(NSUInteger)b;
 - (void)resetLastInputRect;
 - (void)enlargeLastInputRect:(NSRect)r;
 @end
-@interface DrawLayer : CAMetalLayer{
-	NSRect _dirtyRect;
-}
+@interface DrawLayer : CAMetalLayer
 @end
 
 static AppDelegate *myApp = NULL;
@@ -217,7 +207,6 @@ threadmain(int argc, char **argv)
 	layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 	layer.framebufferOnly = YES;
 	layer.opaque = YES;
-	layer.allowsNextDrawableTimeout = NO;
 
 	renderPass = [MTLRenderPassDescriptor renderPassDescriptor];
 	renderPass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
@@ -344,6 +333,15 @@ threadmain(int argc, char **argv)
 @end
 
 @implementation DevDrawView
+{
+	NSMutableString *_tmpText;
+	NSRange _markedRange;
+	NSRange _selectedRange;
+	NSRect _lastInputRect;	// The view is flipped, this is not.
+	BOOL _tapping;
+	NSUInteger _tapFingers;
+	NSUInteger _tapTime;
+}
 
 - (id)init
 {
@@ -741,6 +739,9 @@ threadmain(int argc, char **argv)
 @end
 
 @implementation DrawLayer
+{
+	NSRect _dirtyRect;
+}
 
 - (id)init
 {
@@ -759,6 +760,7 @@ threadmain(int argc, char **argv)
 {
 	id<MTLCommandBuffer> cbuf;
 	id<MTLBlitCommandEncoder> blit;
+	id<MTLRenderCommandEncoder> cmd;
 
 	LOG(@"display");
 
@@ -777,22 +779,17 @@ threadmain(int argc, char **argv)
 	[blit endEncoding];
 	[cbuf commit];
 
-	_dirtyRect.origin.x = 0.0;
-	_dirtyRect.origin.y = 0.0;
-	_dirtyRect.size.width = 0.0;
-	_dirtyRect.size.height = 0.0;
-
 	cbuf = [commandQueue commandBuffer];
 
 	LOG(@"display query drawable");
 
 @autoreleasepool{
-	id<MTLRenderCommandEncoder> cmd;
 	id<CAMetalDrawable> drawable;
 
 	drawable = [layer nextDrawable];
 	if(!drawable){
-		NSLog(@"display couldn't get drawable");
+		LOG(@"display couldn't get drawable");
+		[self setNeedsDisplayInRect:_dirtyRect];
 		return;
 	}
 
@@ -819,6 +816,11 @@ threadmain(int argc, char **argv)
 	[cbuf commit];
 
 	LOG(@"display commit");
+
+	_dirtyRect.origin.x = 0.0;
+	_dirtyRect.origin.y = 0.0;
+	_dirtyRect.size.width = 0.0;
+	_dirtyRect.size.height = 0.0;
 }
 
 @end
@@ -963,11 +965,11 @@ initimg(void)
 		width:size.width
 		height:size.height
 		mipmapped:NO];
-	textureDesc.usage = MTLTextureUsageShaderRead;
-	textureDesc.allowGPUOptimizedContents = YES;
-	textureDesc.storageMode = MTLStorageModePrivate;
 	textureDesc.resourceOptions = MTLResourceStorageModePrivate
 		| MTLResourceHazardTrackingModeUntracked;
+	textureDesc.allowGPUOptimizedContents = YES;
+	textureDesc.usage = MTLTextureUsageShaderRead;
+	textureDesc.storageMode = MTLStorageModePrivate;
 	texture = [device newTextureWithDescriptor:textureDesc];
 
 	scale = [win backingScaleFactor];
