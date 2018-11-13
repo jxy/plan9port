@@ -69,7 +69,6 @@ static id<MTLDevice> device;
 static id<MTLRenderPipelineState> pipelineState;
 static id<MTLCommandQueue> commandQueue;
 static id<MTLTexture> texture;
-static id<MTLBuffer> buf;
 
 static Memimage *img = NULL;
 
@@ -247,7 +246,8 @@ threadmain(int argc, char **argv)
 
 	r = [v rectValue];
 	LOG(@"callsetNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
-
+	r = [win convertRectFromBacking:r];
+	LOG(@"setNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
 	[layer setNeedsDisplayInRect:r];
 	[myContent enlargeLastInputRect:r];
 }
@@ -711,7 +711,6 @@ threadmain(int argc, char **argv)
 
 - (void)enlargeLastInputRect:(NSRect)r
 {
-	r = [win convertRectFromBacking:r];
 	r.origin.y = [self bounds].size.height - r.origin.y - r.size.height;
 	_lastInputRect = NSUnionRect(_lastInputRect, r);
 	LOG(@"update last input rect (%g, %g, %g, %g)",
@@ -739,45 +738,13 @@ threadmain(int argc, char **argv)
 @end
 
 @implementation DrawLayer
-{
-	NSRect _dirtyRect;
-}
-
-- (id)init
-{
-	self = [super init];
-	_dirtyRect = NSMakeRect(0.0, 0.0, 0.0, 0.0);
-	return self;
-}
-
-- (void)setNeedsDisplayInRect:(NSRect)r
-{
-	_dirtyRect = NSUnionRect(_dirtyRect, r);
-	[super setNeedsDisplayInRect:[win convertRectFromBacking:r]];
-}
 
 - (void)display
 {
 	id<MTLCommandBuffer> cbuf;
-	id<MTLBlitCommandEncoder> blit;
 	id<MTLRenderCommandEncoder> cmd;
 
 	LOG(@"display");
-
-	cbuf = [commandQueue commandBuffer];
-	blit = [cbuf blitCommandEncoder];
-	[blit
-		copyFromBuffer:buf
-		sourceOffset:byteaddr(img, Pt(_dirtyRect.origin.x, _dirtyRect.origin.y))-img->data->bdata
-		sourceBytesPerRow:4*img->width
-		sourceBytesPerImage:0
-		sourceSize:MTLSizeMake(_dirtyRect.size.width, _dirtyRect.size.height, 1)
-		toTexture:texture
-		destinationSlice:0
-		destinationLevel:0
-		destinationOrigin:MTLOriginMake(_dirtyRect.origin.x, _dirtyRect.origin.y, 1)];
-	[blit endEncoding];
-	[cbuf commit];
 
 	cbuf = [commandQueue commandBuffer];
 
@@ -789,7 +756,7 @@ threadmain(int argc, char **argv)
 	drawable = [layer nextDrawable];
 	if(!drawable){
 		LOG(@"display couldn't get drawable");
-		[self setNeedsDisplayInRect:_dirtyRect];
+		[self setNeedsDisplay];
 		return;
 	}
 
@@ -816,11 +783,6 @@ threadmain(int argc, char **argv)
 	[cbuf commit];
 
 	LOG(@"display commit");
-
-	_dirtyRect.origin.x = 0.0;
-	_dirtyRect.origin.y = 0.0;
-	_dirtyRect.size.width = 0.0;
-	_dirtyRect.size.height = 0.0;
 }
 
 @end
@@ -947,29 +909,14 @@ initimg(void)
 	if(img->data == nil)
 		panic("img->data == nil");
 
-	// We cannot provide img->data->bdata for the MTLBuffer,
-	// because the MTLBuffer requires the memory allocation
-	// be covered by a single VM region, typically allocated
-	// with vm_allocate or mmap.  Memory allocated by
-	// malloc is specifically disallowed.  Therefore we
-	// use the contents of the MTLBuffer for img->data->bdata
-	// instead.
-	buf = [device
-			newBufferWithLength:4*size.width*size.height
-			options:MTLResourceStorageModeManaged
-				| MTLResourceHazardTrackingModeUntracked];
-	img->data->bdata = [buf contents];
-
 	textureDesc = [MTLTextureDescriptor
 		texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
 		width:size.width
 		height:size.height
 		mipmapped:NO];
-	textureDesc.resourceOptions = MTLResourceStorageModePrivate
-		| MTLResourceHazardTrackingModeUntracked;
 	textureDesc.allowGPUOptimizedContents = YES;
 	textureDesc.usage = MTLTextureUsageShaderRead;
-	textureDesc.storageMode = MTLStorageModePrivate;
+	textureDesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
 	texture = [device newTextureWithDescriptor:textureDesc];
 
 	scale = [win backingScaleFactor];
@@ -994,6 +941,11 @@ _flushmemscreen(Rectangle r)
 	LOG(@"_flushmemscreen(%d,%d,%d,%d)", r.min.x, r.min.y, Dx(r), Dy(r));
 
 	@autoreleasepool{
+		[texture
+			replaceRegion:MTLRegionMake2D(r.min.x, r.min.y, Dx(r), Dy(r))
+			mipmapLevel:0
+			withBytes:byteaddr(img, Pt(r.min.x, r.min.y))
+			bytesPerRow:img->width*sizeof(u32int)];
 		[AppDelegate
 			performSelectorOnMainThread:@selector(callsetNeedsDisplayInRect:)
 			withObject:[NSValue valueWithRect:NSMakeRect(r.min.x, r.min.y, Dx(r), Dy(r))]
