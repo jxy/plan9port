@@ -61,9 +61,6 @@ elif [ $WSYSTYPE = osx ]; then
 	echo 'MACARGV=macargv.o'
 elif [ $WSYSTYPE = osx-cocoa ]; then
 	if sw_vers|awk '/ProductVersion/{split($2,a,".");exit(a[2]<14)}' >/dev/null; then	# 0 is true in sh.
-		COCOATYPE=metal
-	fi
-	if [ X$COCOATYPE = Xmetal ]; then
 		echo 'OBJCFLAGS=$OBJCFLAGS -fobjc-arc'
 		echo 'WSYSOFILES=$WSYSOFILES osx-draw.o cocoa-screen-metal-objc.o cocoa-srv.o cocoa-thread.o'
 	else

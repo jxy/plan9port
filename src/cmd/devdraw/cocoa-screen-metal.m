@@ -63,7 +63,10 @@ usage(void)
 - (void)resetLastInputRect;
 - (void)enlargeLastInputRect:(NSRect)r;
 @end
-@interface DrawLayer : CAMetalLayer @end
+@interface DrawLayer : CAMetalLayer{
+	NSRect _dirtyRect;
+}
+@end
 
 static AppDelegate *myApp = NULL;
 static DevDrawView *myContent = NULL;
@@ -76,6 +79,7 @@ static id<MTLDevice> device;
 static id<MTLRenderPipelineState> pipelineState;
 static id<MTLCommandQueue> commandQueue;
 static id<MTLTexture> texture;
+static id<MTLBuffer> buf;
 
 static Memimage *img = NULL;
 
@@ -213,10 +217,11 @@ threadmain(int argc, char **argv)
 	layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 	layer.framebufferOnly = YES;
 	layer.opaque = YES;
+	layer.allowsNextDrawableTimeout = NO;
 
 	renderPass = [MTLRenderPassDescriptor renderPassDescriptor];
 	renderPass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
-	renderPass.colorAttachments[0].storeAction = MTLStoreActionStore;
+	renderPass.colorAttachments[0].storeAction = MTLStoreActionDontCare;
 
 	library = [device newLibraryWithSource:metal options:nil error:&error];
 	if(!library)
@@ -253,9 +258,8 @@ threadmain(int argc, char **argv)
 
 	r = [v rectValue];
 	LOG(@"callsetNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
-	r = [win convertRectFromBacking:r];
-	LOG(@"setNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
-	[myContent setNeedsDisplayInRect:r];
+
+	[layer setNeedsDisplayInRect:r];
 	[myContent enlargeLastInputRect:r];
 }
 
@@ -456,10 +460,6 @@ threadmain(int argc, char **argv)
 		&& [e touchesMatchingPhase:NSTouchPhaseTouching inView:nil].count == 0
 		&& msec() - _tapTime < 250){
 		switch(_tapFingers){
-		case 2:
-			[self sendmouse:4];
-			[self sendmouse:0];
-			break;
 		case 3:
 			[self sendmouse:2];
 			[self sendmouse:0];
@@ -713,6 +713,7 @@ threadmain(int argc, char **argv)
 
 - (void)enlargeLastInputRect:(NSRect)r
 {
+	r = [win convertRectFromBacking:r];
 	r.origin.y = [self bounds].size.height - r.origin.y - r.size.height;
 	_lastInputRect = NSUnionRect(_lastInputRect, r);
 	LOG(@"update last input rect (%g, %g, %g, %g)",
@@ -741,19 +742,54 @@ threadmain(int argc, char **argv)
 
 @implementation DrawLayer
 
+- (id)init
+{
+	self = [super init];
+	_dirtyRect = NSMakeRect(0.0, 0.0, 0.0, 0.0);
+	return self;
+}
+
+- (void)setNeedsDisplayInRect:(NSRect)r
+{
+	_dirtyRect = NSUnionRect(_dirtyRect, r);
+	[super setNeedsDisplayInRect:[win convertRectFromBacking:r]];
+}
+
 - (void)display
 {
+	id<MTLCommandBuffer> cbuf;
+	id<MTLBlitCommandEncoder> blit;
+
 	LOG(@"display");
 
-	id<MTLCommandBuffer> cbuf;
-	id<MTLRenderCommandEncoder> cmd;
-	id<CAMetalDrawable> drawable;
+	cbuf = [commandQueue commandBuffer];
+	blit = [cbuf blitCommandEncoder];
+	[blit
+		copyFromBuffer:buf
+		sourceOffset:byteaddr(img, Pt(_dirtyRect.origin.x, _dirtyRect.origin.y))-img->data->bdata
+		sourceBytesPerRow:4*img->width
+		sourceBytesPerImage:0
+		sourceSize:MTLSizeMake(_dirtyRect.size.width, _dirtyRect.size.height, 1)
+		toTexture:texture
+		destinationSlice:0
+		destinationLevel:0
+		destinationOrigin:MTLOriginMake(_dirtyRect.origin.x, _dirtyRect.origin.y, 1)];
+	[blit endEncoding];
+	[cbuf commit];
+
+	_dirtyRect.origin.x = 0.0;
+	_dirtyRect.origin.y = 0.0;
+	_dirtyRect.size.width = 0.0;
+	_dirtyRect.size.height = 0.0;
 
 	cbuf = [commandQueue commandBuffer];
 
 	LOG(@"display query drawable");
 
 @autoreleasepool{
+	id<MTLRenderCommandEncoder> cmd;
+	id<CAMetalDrawable> drawable;
+
 	drawable = [layer nextDrawable];
 	if(!drawable){
 		NSLog(@"display couldn't get drawable");
@@ -909,18 +945,40 @@ initimg(void)
 	if(img->data == nil)
 		panic("img->data == nil");
 
+	// We cannot provide img->data->bdata for the MTLBuffer,
+	// because the MTLBuffer requires the memory allocation
+	// be covered by a single VM region, typically allocated
+	// with vm_allocate or mmap.  Memory allocated by
+	// malloc is specifically disallowed.  Therefore we
+	// use the contents of the MTLBuffer for img->data->bdata
+	// instead.
+	buf = [device
+			newBufferWithLength:4*size.width*size.height
+			options:MTLResourceStorageModeManaged
+				| MTLResourceHazardTrackingModeUntracked];
+	img->data->bdata = [buf contents];
+
 	textureDesc = [MTLTextureDescriptor
 		texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
 		width:size.width
 		height:size.height
 		mipmapped:NO];
 	textureDesc.usage = MTLTextureUsageShaderRead;
-	textureDesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
+	textureDesc.allowGPUOptimizedContents = YES;
+	textureDesc.storageMode = MTLStorageModePrivate;
+	textureDesc.resourceOptions = MTLResourceStorageModePrivate
+		| MTLResourceHazardTrackingModeUntracked;
 	texture = [device newTextureWithDescriptor:textureDesc];
 
 	scale = [win backingScaleFactor];
 	[layer setDrawableSize:size];
 	[layer setContentsScale:scale];
+
+	// NOTE: This is not really the display DPI.
+	// On retina, scale is 2; otherwise it is 1.
+	// This formula gives us 220 for retina, 110 otherwise.
+	// That's not quite right but it's close to correct.
+	// https://en.wikipedia.org/wiki/Retina_display#Models
 	displaydpi = scale * 110;
 }
 	LOG(@"initimg return");
@@ -931,17 +989,9 @@ initimg(void)
 void
 _flushmemscreen(Rectangle r)
 {
-	size_t l;
-
 	LOG(@"_flushmemscreen(%d,%d,%d,%d)", r.min.x, r.min.y, Dx(r), Dy(r));
 
-	l = img->width*sizeof(u32int);
 	@autoreleasepool{
-		[texture
-			replaceRegion:MTLRegionMake2D(r.min.x, r.min.y, Dx(r), Dy(r))
-			mipmapLevel:0
-			withBytes:byteaddr(img, Pt(r.min.x, r.min.y))
-			bytesPerRow:l];
 		[AppDelegate
 			performSelectorOnMainThread:@selector(callsetNeedsDisplayInRect:)
 			withObject:[NSValue valueWithRect:NSMakeRect(r.min.x, r.min.y, Dx(r), Dy(r))]
