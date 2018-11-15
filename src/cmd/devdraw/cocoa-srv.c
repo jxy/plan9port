@@ -191,6 +191,7 @@ runmsg(Wsysmsg *m)
 		break;
 
 	case Trddraw:
+		zlock();
 		n = m->count;
 		if(n > sizeof buf)
 			n = sizeof buf;
@@ -202,13 +203,16 @@ runmsg(Wsysmsg *m)
 			m->data = buf;
 			replymsg(m);
 		}
+		zunlock();
 		break;
 
 	case Twrdraw:
+		zlock();
 		if(_drawmsgwrite(m->data, m->count) < 0)
 			replyerror(m);
 		else
 			replymsg(m);
+		zunlock();
 		break;
 	
 	case Ttop:
@@ -297,9 +301,6 @@ matchmouse(void)
 #if OSX_VERSION < 101400
 		m.resized = mouseresized;
 		mouseresized = 0;
-#else
-		m.resized = atomic_exchange(&mouseresized, 0);
-#endif
 		/*
 		if(m.resized)
 			fprint(2, "sending resize\n");

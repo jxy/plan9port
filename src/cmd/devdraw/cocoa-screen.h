@@ -20,10 +20,5 @@ void resizeimg(void);
 
 Rectangle mouserect;
 
-#if OSX_VERSION < 101400
 int mouseresized;
-#else
-#include<stdatomic.h>
-atomic_int mouseresized;
 void resizewindow(Rectangle);
-#endif

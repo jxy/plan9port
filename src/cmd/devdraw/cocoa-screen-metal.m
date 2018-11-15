@@ -187,7 +187,7 @@ threadmain(int argc, char **argv)
 	if(!set)
 		[win center];
 	[win setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
-	[win setContentMinSize:NSMakeSize(128,128)];
+	[win setContentMinSize:NSMakeSize(64,64)];
 
 	[win setRestorable:NO];
 	[win setAcceptsMouseMovedEvents:YES];
@@ -255,15 +255,19 @@ threadmain(int argc, char **argv)
 + (void)callsetcursor:(NSValue *)v
 {
 	Cursor *c;
-	NSBitmapImageRep *r;
+	NSBitmapImageRep *r, *r2;
 	NSImage *i;
 	NSPoint p;
-	int b;
-	uchar *plane[5];
+	uint b, x, y, a;
+	uchar *plane[5], *plane2[5];
+	uchar pu, pb, pl, pr, pc;  // upper, bottom, left, right, center
+	uchar pul, pur, pbl, pbr;
+	uchar ful, fur, fbl, fbr;
 
 	c = [v pointerValue];
 	if(!c)
 		c = &bigarrow;
+
 	r = [[NSBitmapImageRep alloc]
 		initWithBitmapDataPlanes:nil
 		pixelsWide:16
@@ -274,18 +278,71 @@ threadmain(int argc, char **argv)
 		isPlanar:YES
 		colorSpaceName:NSDeviceWhiteColorSpace
 		bytesPerRow:2
-		bitsPerPixel:1];
-
+		bitsPerPixel:0];
 	[r getBitmapDataPlanes:plane];
-
 	for(b=0; b<2*16; b++){
-		plane[0][b] = ~c->set[b];
-		plane[1][b] = c->clr[b];
+		plane[0][b] = ~c->set[b] & c->clr[b];
+		plane[1][b] = c->set[b] | c->clr[b];
 	}
-	p = NSMakePoint(-c->offset.x, -c->offset.y);
+
+	r2 = [[NSBitmapImageRep alloc]
+		initWithBitmapDataPlanes:nil
+		pixelsWide:32
+		pixelsHigh:32
+		bitsPerSample:1
+		samplesPerPixel:2
+		hasAlpha:YES
+		isPlanar:YES
+		colorSpaceName:NSDeviceWhiteColorSpace
+		bytesPerRow:4
+		bitsPerPixel:0];
+	[r2 getBitmapDataPlanes:plane2];
+	// https://en.wikipedia.org/wiki/Pixel-art_scaling_algorithms#EPX/Scale2×/AdvMAME2×
+	for(a=0; a<2; a++){
+		for(y=0; y<16; y++){
+			for(x=0; x<2; x++){
+				pc = plane[a][x+2*y];
+				pu = y==0 ? pc : plane[a][x+2*(y-1)];
+				pb = y==15 ? pc : plane[a][x+2*(y+1)];
+				pl = (pc>>1) | (x==0 ? pc&0x80 : (plane[a][x-1+2*y]&1)<<7);
+				pr = (pc<<1) | (x==1 ? pc&1 : (plane[a][x+1+2*y]&0x80)>>7);
+				ful = ~(pl^pu) & (pl^pb) & (pu^pr);
+				pul = (ful & pu) | (~ful & pc);
+				fur = ~(pu^pr) & (pu^pl) & (pr^pb);
+				pur = (fur & pr) | (~fur & pc);
+				fbl = ~(pb^pl) & (pb^pr) & (pl^pu);
+				pbl = (fbl & pl) | (~fbl & pc);
+				fbr = ~(pr^pb) & (pr^pu) & (pb^pl);
+				pbr = (fbr & pb) | (~fbr & pc);
+				plane2[a][2*x+4*2*y] = (pul&0x80) | ((pul&0x40)>>1)  | ((pul&0x20)>>2) | ((pul&0x10)>>3)
+					| ((pur&0x80)>>1) | ((pur&0x40)>>2)  | ((pur&0x20)>>3) | ((pur&0x10)>>4);
+				plane2[a][2*x+1+4*2*y] = ((pul&0x8)<<4) | ((pul&0x4)<<3)  | ((pul&0x2)<<2) | ((pul&0x1)<<1)
+					| ((pur&0x8)<<3) | ((pur&0x4)<<2)  | ((pur&0x2)<<1) | (pur&0x1);
+				plane2[a][2*x+4*(2*y+1)] =  (pbl&0x80) | ((pbl&0x40)>>1)  | ((pbl&0x20)>>2) | ((pbl&0x10)>>3)
+					| ((pbr&0x80)>>1) | ((pbr&0x40)>>2)  | ((pbr&0x20)>>3) | ((pbr&0x10)>>4);
+				plane2[a][2*x+1+4*(2*y+1)] = ((pbl&0x8)<<4) | ((pbl&0x4)<<3)  | ((pbl&0x2)<<2) | ((pbl&0x1)<<1)
+					| ((pbr&0x8)<<3) | ((pbr&0x4)<<2)  | ((pbr&0x2)<<1) | (pbr&0x1);
+			}
+		}
+	}
+
+	// For checking out the cursor bitmap image
+/*
+	static BOOL saveimg = YES;
+	if(saveimg){
+		NSData *data = [r representationUsingType: NSBitmapImageFileTypeBMP properties: @{}];
+		[data writeToFile: @"/tmp/r.bmp" atomically: NO];
+		data = [r2 representationUsingType: NSBitmapImageFileTypeBMP properties: @{}];
+		[data writeToFile: @"/tmp/r2.bmp" atomically: NO];
+		saveimg = NO;
+	}
+*/
+
 	i = [[NSImage alloc] initWithSize:NSMakeSize(16, 16)];
+	[i addRepresentation:r2];
 	[i addRepresentation:r];
 
+	p = NSMakePoint(-c->offset.x, -c->offset.y);
 	currentCursor = [[NSCursor alloc] initWithImage:i hotSpot:p];
 
 	[win invalidateCursorRectsForView:myContent];
@@ -300,6 +357,7 @@ threadmain(int argc, char **argv)
 	LOG(@"applicationDidFinishLaunching");
 
 	sm = [NSMenu new];
+	[sm addItemWithTitle:@"Toggle Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
 	[sm addItemWithTitle:@"Hide" action:@selector(hide:) keyEquivalent:@"h"];
 	[sm addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"];
 	m = [NSMenu new];
@@ -886,7 +944,7 @@ attachscreen(char *label, char *winsize)
 		waitUntilDone:YES];
 	kicklabel(label);
 	setcursor(nil);
-	atomic_init(&mouseresized, 0);
+	mouseresized = 0;
 	return initimg();
 }
 
@@ -958,7 +1016,6 @@ setmouse(Point p)
 {
 	@autoreleasepool{
 		NSPoint q;
-		NSInteger h;
 
 		LOG(@"setmouse(%d,%d)", p.x, p.y);
 		q = [win convertPointFromBacking:NSMakePoint(p.x, p.y)];
@@ -966,8 +1023,15 @@ setmouse(Point p)
 		q = [myContent convertPoint:q toView:nil];
 		LOG(@"(%g, %g) <- toWindow", q.x, q.y);
 		q = [win convertPointToScreen:q];
-		h = [[NSScreen mainScreen] frame].size.height;
-		q.y = h - q.y;
+		LOG(@"(%g, %g) <- toScreen", q.x, q.y);
+		// Quartz has the origin of the "global display
+		// coordinate space" at the top left of the primary
+		// screen with y increasing downward, while Cocoa has
+		// the origin at the bottom left of the primary screen
+		// with y increasing upward.  We flip the coordinate
+		// with a negative sign and shift upward by the height
+		// of the primary screen.
+		q.y = NSScreen.screens[0].frame.size.height - q.y;
 		LOG(@"(%g, %g) <- setmouse", q.x, q.y);
 		CGWarpMouseCursorPosition(NSPointToCGPoint(q));
 		CGAssociateMouseAndMouseCursorPosition(true);
@@ -1058,17 +1122,25 @@ topwin(void)
 void
 resizeimg(void)
 {
+	zlock();
 	_drawreplacescreenimage(initimg());
 
-	atomic_store(&mouseresized, 1);
+	mouseresized = 1;
+	zunlock();
 	[myContent sendmouse:0];
 }
 
 void
 resizewindow(Rectangle r)
 {
-	// XXX never called
-	LOG(@"resizewindow %d %d", Dx(r), Dy(r));
+	LOG(@"resizewindow %d %d %d %d", r.min.x, r.min.y, Dx(r), Dy(r));
+	dispatch_async(dispatch_get_main_queue(), ^(void){
+		NSSize s;
+
+		s = [myContent convertSizeFromBacking:NSMakeSize(Dx(r), Dy(r))];
+		[win setContentSize:s];
+		resizeimg();
+	});
 }
 
 static void
