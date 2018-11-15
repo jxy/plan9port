@@ -298,7 +298,6 @@ matchmouse(void)
 		if(mousetags.ri == nelem(mousetags.t))
 			mousetags.ri = 0;
 		m.mouse = mouse.m[mouse.ri];
-#if OSX_VERSION < 101400
 		m.resized = mouseresized;
 		mouseresized = 0;
 		/*
