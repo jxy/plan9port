@@ -198,6 +198,8 @@ threadmain(int argc, char **argv)
 	[myContent setWantsLayer:YES];
 	[myContent setLayerContentsRedrawPolicy:NSViewLayerContentsRedrawOnSetNeedsDisplay];
 
+	[myContent addSubview:[[NSTextView alloc] initWithFrame:NSMakeRect(0,0,0.1,0.1)]];
+
 	device = MTLCreateSystemDefaultDevice();
 	commandQueue = [device newCommandQueue];
 
