@@ -971,15 +971,6 @@ alllooper(Window *w, void *v)
 }
 
 void
-alllocker(Window *w, void *v)
-{
-	if(v)
-		incref(&w->ref);
-	else
-		winclose(w);
-}
-
-void
 filelooper(Cmd *cp, int XY)
 {
 	int i;
