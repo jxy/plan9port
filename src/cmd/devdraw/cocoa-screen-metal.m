@@ -49,6 +49,12 @@ usage(void)
 + (void)callsetcursor:(NSValue *)v;
 @end
 @interface DevDrawView : NSView<NSTextInputClient>
+@property NSSize nativeScale;
+- (NSRect) convertRectFromNative:(NSRect)r;
+- (NSPoint) convertPointToNative:(NSPoint)p;
+- (NSPoint) convertPointFromNative:(NSPoint)p;
+- (NSSize) convertSizeToNative:(NSSize)s;
+- (NSSize) convertSizeFromNative:(NSSize)s;
 - (void)clearInput;
 - (void)getmouse:(NSEvent *)e;
 - (void)sendmouse:(NSUInteger)b;
@@ -175,6 +181,8 @@ threadmain(int argc, char **argv)
 	layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 	layer.framebufferOnly = YES;
 	layer.opaque = YES;
+	layer.minificationFilter = kCAFilterTrilinear;
+	layer.magnificationFilter = kCAFilterTrilinear;
 
 	// We use a default transparent layer on top of the CAMetalLayer.
 	// This seems to make fullscreen applications behave.
@@ -203,7 +211,9 @@ threadmain(int argc, char **argv)
 	NSRect r;
 
 	r = [v rectValue];
-	LOG(@"callsetNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
+	LOG(@"callsetNeedsDisplayInRect native(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
+	r = [myContent convertRectFromNative:r];
+	LOG(@"callsetNeedsDisplayInRect backing(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
 	r = [win convertRectFromBacking:r];
 	LOG(@"setNeedsDisplayInRect(%g, %g, %g, %g)", r.origin.x, r.origin.y, r.size.width, r.size.height);
 	[layer setNeedsDisplayInRect:r];
@@ -281,13 +291,18 @@ struct Cursors {
 	}
 */
 
-	i = [[NSImage alloc] initWithSize:NSMakeSize(16, 16)];
+	NSSize csize = [myContent convertSizeFromNative:NSMakeSize(16, 16)];
+	i = [[NSImage alloc] initWithSize:csize];
+	r2.size = csize;
+	r.size = csize;
 	[i addRepresentation:r2];
 	[i addRepresentation:r];
+	i.size = csize;
 
 	p = NSMakePoint(-c->offset.x, -c->offset.y);
 	currentCursor = [[NSCursor alloc] initWithImage:i hotSpot:p];
 
+	LOG(@"invalidateCursorRects");
 	[win invalidateCursorRectsForView:myContent];
 }
 
@@ -502,8 +517,9 @@ struct Cursors {
 {
 	NSPoint p;
 
-	p = [self.window convertPointToBacking:
-		[self.window mouseLocationOutsideOfEventStream]];
+	p = [self convertPointToNative:
+		[self.window convertPointToBacking:
+		[self.window mouseLocationOutsideOfEventStream]]];
 	p.y = Dy(mouserect) - p.y;
 	// LOG(@"(%g, %g) <- sendmouse(%d)", p.x, p.y, (uint)b);
 	mousetrack(p.x, p.y, b, msec());
@@ -512,6 +528,7 @@ struct Cursors {
 }
 
 - (void)resetCursorRects {
+	LOG(@"resetCursorRects");
 	[super resetCursorRects];
 	[self addCursorRect:self.bounds cursor:currentCursor];
 }
@@ -676,7 +693,7 @@ struct Cursors {
 		r.location, r.length, actualRange->location, actualRange->length);
 	if(actualRange)
 		*actualRange = r;
-	return [[self window] convertRectToScreen:_lastInputRect];
+	return [self.window convertRectToScreen:_lastInputRect];
 }
 - (void)doCommandBySelector:(SEL)s
 {
@@ -736,6 +753,42 @@ struct Cursors {
 		for(uint i = 0; i < l; ++i)
 			keystroke(Kbs);
 	}
+}
+
+- (NSRect) convertRectFromNative:(NSRect)r
+{
+	NSRect z;
+	z.origin = [self convertPointFromNative:r.origin];
+	z.size = [self convertSizeFromNative:r.size];
+	return z;
+}
+- (NSPoint) convertPointToNative:(NSPoint)p
+{
+	NSPoint z;
+	z.x = p.x / self.nativeScale.width;
+	z.y = p.y / self.nativeScale.height;
+	return z;
+}
+- (NSPoint) convertPointFromNative:(NSPoint)p
+{
+	NSPoint z;
+	z.x = p.x * self.nativeScale.width;
+	z.y = p.y * self.nativeScale.height;
+	return z;
+}
+- (NSSize) convertSizeToNative:(NSSize)s
+{
+	NSSize z;
+	z.width = s.width / self.nativeScale.width;
+	z.height = s.height / self.nativeScale.height;
+	return z;
+}
+- (NSSize) convertSizeFromNative:(NSSize)s
+{
+	NSSize z;
+	z.width = s.width * self.nativeScale.width;
+	z.height = s.height * self.nativeScale.height;
+	return z;
 }
 
 @end
@@ -891,7 +944,6 @@ attachscreen(char *label, char *winsize)
 		withObject:[NSValue valueWithPointer:winsize]
 		waitUntilDone:YES];
 	kicklabel(label);
-	setcursor(nil, nil);
 	mouseresized = 0;
 	return initimg();
 }
@@ -900,14 +952,39 @@ static Memimage*
 initimg(void)
 {
 @autoreleasepool{
-	CGFloat scale;
 	NSSize size;
 	MTLTextureDescriptor *textureDesc;
 
-	size = [myContent convertSizeToBacking:[myContent bounds].size];
-	mouserect = Rect(0, 0, size.width, size.height);
+	CGDirectDisplayID sid = ((NSNumber *)[win.screen.deviceDescription objectForKey:@"NSScreenNumber"]).unsignedIntegerValue;
+	LOG(@"screen id: %u", sid);
+/*
+	CFStringRef key = kCGDisplayShowDuplicateLowResolutionModes;
+	CFBooleanRef t = kCFBooleanTrue;
+	CFDictionaryRef opt = CFDictionaryCreate(kCFAllocatorDefault, (const void **)&key, (const void **)&t, 1, nil, nil);
+	CFArrayRef ms = CGDisplayCopyAllDisplayModes(sid, opt);
+	CFRelease(opt);
+*/
+	CFArrayRef ms = CGDisplayCopyAllDisplayModes(sid, nil);
+	CFIndex n = CFArrayGetCount(ms);
+	NSSize ss = [myContent convertSizeToBacking:win.screen.frame.size];
+	NSSize ns = ss;
+	LOG(@"screen %g %g", ss.width, ss.height);
+	for(int i = 0; i < n; ++i){
+		CGDisplayModeRef m = (CGDisplayModeRef)CFArrayGetValueAtIndex(ms, i);
+		if(CGDisplayModeGetIOFlags(m) & kDisplayModeNativeFlag){
+			ns.width = CGDisplayModeGetPixelWidth(m);
+			ns.height = CGDisplayModeGetPixelHeight(m);
+		}
+		//LOG(@"Mode: %@", m);
+	}
+	CFRelease(ms);
+	myContent.nativeScale = NSMakeSize(ss.width / ns.width, ss.height / ns.height);
+	LOG(@"Native scale: %g %g", myContent.nativeScale.width, myContent.nativeScale.height);
 
-	LOG(@"initimg %.0f %.0f", size.width, size.height);
+	size = [myContent convertSizeToNative:[myContent convertSizeToBacking:myContent.frame.size]];
+	mouserect = Rect(0, 0, round(size.width), round(size.height));
+
+	LOG(@"initimg %d %d", Dx(mouserect), Dy(mouserect));
 
 	img = allocmemimage(mouserect, XRGB32);
 	if(img == nil)
@@ -925,16 +1002,13 @@ initimg(void)
 	textureDesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
 	texture = [device newTextureWithDescriptor:textureDesc];
 
-	scale = [win backingScaleFactor];
-	[layer setDrawableSize:size];
-	[layer setContentsScale:scale];
+	layer.contentsScale = size.height / myContent.frame.size.height;
+	layer.drawableSize = size;
 
-	// NOTE: This is not really the display DPI.
-	// On retina, scale is 2; otherwise it is 1.
-	// This formula gives us 220 for retina, 110 otherwise.
-	// That's not quite right but it's close to correct.
-	// https://en.wikipedia.org/wiki/Retina_display#Models
-	displaydpi = scale * 110;
+	displaydpi = round(25.4 * ns.height / CGDisplayScreenSize(sid).height);
+	LOG(@"displaydpi: %d", displaydpi);
+
+	setcursor(nil, nil);
 }
 	LOG(@"initimg return");
 
@@ -966,7 +1040,9 @@ setmouse(Point p)
 		NSPoint q;
 
 		LOG(@"setmouse(%d,%d)", p.x, p.y);
-		q = [win convertPointFromBacking:NSMakePoint(p.x, p.y)];
+		q = [myContent convertPointFromNative:NSMakePoint(p.x, p.y)];
+		LOG(@"(%g, %g) <- fromNative", q.x, q.y);
+		q = [win convertPointFromBacking:q];
 		LOG(@"(%g, %g) <- fromBacking", q.x, q.y);
 		q = [myContent convertPoint:q toView:nil];
 		LOG(@"(%g, %g) <- toWindow", q.x, q.y);
@@ -1090,7 +1166,7 @@ resizewindow(Rectangle r)
 	dispatch_async(dispatch_get_main_queue(), ^(void){
 		NSSize s;
 
-		s = [myContent convertSizeFromBacking:NSMakeSize(Dx(r), Dy(r))];
+		s = [myContent convertSizeFromBacking:[myContent convertSizeFromNative:NSMakeSize(Dx(r), Dy(r))]];
 		[win setContentSize:s];
 		resizeimg();
 	});
