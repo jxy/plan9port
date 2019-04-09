@@ -122,6 +122,7 @@ threadmain(int argc, char **argv)
 	Rectangle wr;
 	int set;
 	char *s;
+	NSArray *allDevices;
 
 	const NSWindowStyleMask Winstyle = NSWindowStyleMaskTitled
 		| NSWindowStyleMaskClosable
