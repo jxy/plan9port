@@ -467,6 +467,8 @@ matchmouse(void)
 static int kbuttons;
 static int altdown;
 static int kstate;
+static int kcodecontrol, kcodealt, kcodeshift;
+
 
 static void
 sendmouse(Mouse m)
@@ -493,10 +495,13 @@ void
 runxevent(XEvent *xev)
 {
 	int c;
+	int modp;
 	KeySym k;
 	static Mouse m;
 	XButtonEvent *be;
 	XKeyEvent *ke;
+
+	modp = 0;
 
 #ifdef SHOWEVENT
 	static int first = 1;
@@ -573,20 +578,34 @@ runxevent(XEvent *xev)
 			break;
 		}
 
-		switch(k) {
-		case XK_Control_L:
-			if(xev->type == KeyPress)
+		if(xev->type == KeyPress)
+			switch(k) {
+			case XK_Control_L:
+			case XK_Control_R:
+				kcodecontrol = ke->keycode;
 				c |= ControlMask;
-			else
-				c &= ~ControlMask;
-			goto kbutton;
-		case XK_Alt_L:
-		case XK_Shift_L:
-			if(xev->type == KeyPress)
+				modp = 1;
+				break;
+			case XK_Alt_L:
+			case XK_Alt_R:
+				kcodealt = ke->keycode;
+				// fall through
+			case XK_Shift_L:
+			case XK_Shift_R:
+				kcodeshift = ke->keycode;
 				c |= Mod1Mask;
-			else
+				modp = 1;
+			}
+		else {
+			if(ke->keycode == kcodecontrol){
+				c &= ~ControlMask;
+				modp = 1;
+			} else if(ke->keycode == kcodealt || ke->keycode == kcodeshift){
 				c &= ~Mod1Mask;
-		kbutton:
+				modp = 1;
+			}
+		}
+		if(modp){
 			kstate = c;
 			if(m.buttons || kbuttons) {
 				altdown = 0; // used alt
@@ -596,8 +615,8 @@ runxevent(XEvent *xev)
 				if(c & Mod1Mask)
 					kbuttons |= 4;
 				sendmouse(m);
-				break;
 			}
+			modp = 0;
 		}
 
 		if(xev->type != KeyPress)
