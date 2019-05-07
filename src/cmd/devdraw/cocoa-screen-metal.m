@@ -186,15 +186,7 @@ threadmain(int argc, char **argv)
 	layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
 	layer.framebufferOnly = YES;
 	layer.opaque = YES;
-
-	// We use a default transparent layer on top of the CAMetalLayer.
-	// This seems to make fullscreen applications behave.
-	{
-		CALayer *stub = [CALayer layer];
-		stub.frame = CGRectMake(0, 0, 1, 1);
-		[stub setNeedsDisplay];
-		[layer addSublayer:stub];
-	}
+	layer.colorspace = nil;  // Explicitly setting to nil avoids fullscreen artifacts.
 
 	[NSEvent setMouseCoalescingEnabled:NO];
 
