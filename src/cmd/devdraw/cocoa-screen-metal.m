@@ -178,7 +178,7 @@ threadmain(int argc, char **argv)
 	}
 	if(!device)
 		device = MTLCreateSystemDefaultDevice();
-	
+
 	commandQueue = [device newCommandQueue];
 
 	layer = (DrawLayer *)[myContent layer];
