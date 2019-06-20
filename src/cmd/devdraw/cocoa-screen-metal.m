@@ -224,6 +224,10 @@ threadmain(int argc, char **argv)
 	dispatch_after(time, dispatch_get_main_queue(), ^(void){
 		[layer setNeedsDisplayInRect:r];
 	});
+	time = dispatch_time(DISPATCH_TIME_NOW, 16 * NSEC_PER_MSEC);
+	dispatch_after(time, dispatch_get_main_queue(), ^(void){
+		[layer setNeedsDisplayInRect:r];
+	});
 
 	[myContent enlargeLastInputRect:r];
 }
