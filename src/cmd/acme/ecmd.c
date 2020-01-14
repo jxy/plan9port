@@ -582,11 +582,9 @@ x_cmd(Text *t, Cmd *cp)
 int
 X_cmd(Text *t, Cmd *cp)
 {
-	if(t && t->w)
-		winunlock(t->w);
+	USED(t);
+
 	filelooper(cp, cp->cmdc=='X');
-	if(t && t->w)
-		winlock(t->w, cp->cmdc);
 	return TRUE;
 }
 
@@ -971,10 +969,18 @@ alllooper(Window *w, void *v)
 }
 
 void
+alllocker(Window *w, void *v)
+{
+	if(v)
+		incref(&w->ref);
+	else
+		winclose(w);
+}
+
+void
 filelooper(Cmd *cp, int XY)
 {
 	int i;
-	Window *w;
 
 	if(Glooping++)
 		editerror("can't nest %c command", "YX"[XY]);
@@ -987,14 +993,18 @@ filelooper(Cmd *cp, int XY)
 	loopstruct.w = nil;
 	loopstruct.nw = 0;
 	allwindows(alllooper, &loopstruct);
-	for(i=0; i<loopstruct.nw; i++){
-		w = loopstruct.w[i]->body.w;
-		if(w)
-			winlock(w, "YX"[XY]);
+	/*
+	 * add a ref to all windows to keep safe windows accessed by X
+	 * that would not otherwise have a ref to hold them up during
+	 * the shenanigans.  note this with globalincref so that any
+	 * newly created windows start with an extra reference.
+	 */
+	allwindows(alllocker, (void*)1);
+	globalincref = 1;
+	for(i=0; i<loopstruct.nw; i++)
 		cmdexec(&loopstruct.w[i]->body, cp->u.cmd);
-		if(w)
-			winunlock(w);
-	}
+	allwindows(alllocker, (void*)0);
+	globalincref = 0;
 	free(loopstruct.w);
 	loopstruct.w = nil;
 
