@@ -324,7 +324,7 @@ filethread(void *v)
 	threadsetname("file %s", a->file);
 	w = newwin();
 	winname(w, a->file);
-	winprint(w, "tag", "Get Put Look ");
+	winprint(w, "tag", "Get Put ");
 	c = wineventchan(w);
 
 	goto caseGet;
