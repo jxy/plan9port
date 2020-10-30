@@ -1,8 +1,8 @@
 .TH BIO 3
 .SH NAME
-Bopen, Bfdopen, Binit, Binits, Brdline, Brdstr, Bgetc, Bgetrune, Bgetd, Bungetc, Bungetrune, Bread, Bseek, Boffset, Bfildes, Blinelen, Bputc, Bputrune, Bprint, Bvprint, Bwrite, Bflush, Bterm, Bbuffered \- buffered input/output
+Bopen, Bfdopen, Binit, Binits, Brdline, Brdstr, Bgetc, Bgetrune, Bgetd, Bungetc, Bungetrune, Bread, Bseek, Boffset, Bfildes, Blinelen, Bputc, Bputrune, Bprint, Bvprint, Bwrite, Bflush, Bterm, Bbuffered, Blethal \- buffered input/output
 .SH SYNOPSIS
-.ta \w'\fLBiobuf* 'u
+.ta \w'Biobuf* 'u
 .B #include <u.h>
 .br
 .B #include <libc.h>
@@ -10,10 +10,10 @@ Bopen, Bfdopen, Binit, Binits, Brdline, Brdstr, Bgetc, Bgetrune, Bgetd, Bungetc,
 .B #include <bio.h>
 .PP
 .B
-Biobuf*	Bopen(char *file, int mode)
+Biobuf* Bopen(char *file, int mode)
 .PP
 .B
-Biobuf*	Bfdopen(int fd, int mode)
+Biobuf* Bfdopen(int fd, int mode)
 .PP
 .B
 int	Binit(Biobuf *bp, int fd, int mode)
@@ -81,6 +81,12 @@ int	Bflush(Biobufhdr *bp)
 .B
 int	Bbuffered(Biobufhdr *bp)
 .PP
+.B
+void	Blethal(Biobufhdr *bp, void (*errorf)(char *))
+.PP
+.B
+void	Biofn(Biobufhdr *bp, int (*iof)(Biobufhdr *, void *, long))
+.PP
 .SH DESCRIPTION
 These routines implement fast buffered I/O.
 I/O on different file descriptors is independent.
@@ -93,7 +99,7 @@ for mode
 or creates for mode
 .BR OWRITE .
 It calls
-.MR malloc (3)
+.IR malloc (3)
 to allocate a buffer.
 .PP
 .I Bfdopen
@@ -104,7 +110,7 @@ for mode
 or
 .BR OWRITE .
 It calls
-.MR malloc (3)
+.IR malloc (3)
 to allocate a buffer.
 .PP
 .I Binit
@@ -147,9 +153,14 @@ returns the integer file descriptor of the associated open file.
 .PP
 .I Bterm
 flushes the buffer for
-.IR bp .
+.I bp
+and returns
+.IR Bflush 's
+return value.
 If the buffer was allocated by
-.IR Bopen ,
+.I Bopen
+or
+.IR Bfdopen ,
 the buffer is
 .I freed
 and the file is closed.
@@ -161,7 +172,7 @@ up to and including the first
 .I delim
 character.
 The delimiter character at the end of the line is
-not altered.
+not altered, thus the returned string probably won't be NUL-terminated.
 .I Brdline
 returns a pointer to the start of the line or
 .L 0
@@ -173,7 +184,7 @@ of the most recent string returned by
 .PP
 .I Brdstr
 returns a
-.MR malloc (3) -allocated
+.IR malloc (3)-allocated
 buffer containing the next line of input delimited by
 .IR delim ,
 terminated by a NUL (0) byte.
@@ -225,7 +236,7 @@ may back up a maximum of five bytes.
 uses
 .I charstod
 (see
-.MR atof (3) )
+.IR atof (3))
 and
 .I Bgetc
 to read the formatted
@@ -246,7 +257,7 @@ and a negative value is returned if a read error occurred.
 .PP
 .I Bseek
 applies
-.MR seek (3)
+.IR seek (3)
 to
 .IR bp .
 It returns the new file offset.
@@ -259,7 +270,7 @@ outputs the low order 8 bits of
 on
 .IR bp .
 If this causes a
-.IR write
+.I write
 to occur and there is an error,
 a negative value is returned.
 Otherwise, a zero is returned.
@@ -268,7 +279,7 @@ Otherwise, a zero is returned.
 calls
 .I Bputc
 to output the low order
-16 bits of
+17 bits of
 .I c
 as a rune
 in
@@ -278,9 +289,9 @@ on the output stream.
 .PP
 .I Bprint
 is a buffered interface to
-.MR print (3) .
+.IR print (3).
 If this causes a
-.IR write
+.I write
 to occur and there is an error,
 a negative value
 .RB ( Beof )
@@ -301,7 +312,7 @@ of data starting at
 to
 .IR bp .
 If this causes a
-.IR write
+.I write
 to occur and there is an error,
 a negative value is returned.
 Otherwise, the number of bytes written is returned.
@@ -322,13 +333,34 @@ returns the number of bytes in the buffer.
 When reading, this is the number of bytes still available from the last
 read on the file; when writing, it is the number of bytes ready to be
 written.
+.PP
+.I Blethal
+arranges
+.I errorf
+to be called in case of an error happening on read/write.
+An argument of
+.B nil
+will have the program terminated in case of error.
+.PP
+If
+.I Biofn
+is called with a non-nil
+.I iof
+function, then that function is called for I/O in lieu of
+.IR read (3)
+and
+.IR write .
+A nil argument for
+.I iof
+restores normal behaviour.
 .SH SOURCE
 .B \*9/src/libbio
 .SH SEE ALSO
-.MR open (3) ,
-.MR print (3) ,
-.MR exits (3) ,
-.MR utf (7) ,
+.IR open (3),
+.IR read (3),
+.IR print (3),
+.IR exits (3),
+.IR utf (7),
 .SH DIAGNOSTICS
 .I Bio
 routines that return integers yield
@@ -341,6 +373,10 @@ returns zero if the file cannot be opened in the given mode.
 All routines set
 .I errstr
 on error.
+.PP
+An error during read or write will call an error handler specified by
+.IR Blethal ,
+if any.
 .SH BUGS
 .I Brdline
 returns an error on strings longer than the buffer associated
@@ -356,6 +392,13 @@ will return zero.
 At the cost of allocating a buffer,
 .I Brdstr
 sidesteps these issues.
+.PP
+Only the low byte of
+.IR Brdstr 's
+.I delim
+is examined, so
+.I delim
+cannot be an arbitrary rune.
 .PP
 The data returned by
 .I Brdline

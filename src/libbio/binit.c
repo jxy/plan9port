@@ -1,12 +1,7 @@
 #include	"lib9.h"
 #include	<bio.h>
 
-enum
-{
-	MAXBUFS	= 20
-};
-
-static	Biobuf*	wbufs[MAXBUFS];
+static	Biobuf*	wbufs[20];
 static	int		atexitflag;
 
 static
@@ -16,7 +11,7 @@ batexit(void)
 	Biobuf *bp;
 	int i;
 
-	for(i=0; i<MAXBUFS; i++) {
+	for(i=0; i<nelem(wbufs); i++) {
 		bp = wbufs[i];
 		if(bp != 0) {
 			wbufs[i] = 0;
@@ -31,7 +26,7 @@ deinstall(Biobuf *bp)
 {
 	int i;
 
-	for(i=0; i<MAXBUFS; i++)
+	for(i=0; i<nelem(wbufs); i++)
 		if(wbufs[i] == bp)
 			wbufs[i] = 0;
 }
@@ -43,7 +38,7 @@ install(Biobuf *bp)
 	int i;
 
 	deinstall(bp);
-	for(i=0; i<MAXBUFS; i++)
+	for(i=0; i<nelem(wbufs); i++)
 		if(wbufs[i] == 0) {
 			wbufs[i] = bp;
 			break;
@@ -54,27 +49,40 @@ install(Biobuf *bp)
 	}
 }
 
-int
-Binits(Biobuf *bp, int f, int mode, unsigned char *p, int size)
+static int
+bioread(Biobuf *bp, void *v, long n)
 {
+	return read(bp->fid, v, n);
+}
 
+static int
+biowrite(Biobuf *bp, void *v, long n)
+{
+	return write(bp->fid, v, n);
+}
+
+int
+Binits(Biobuf *bp, int f, int mode, uchar *p, int size)
+{
 	p += Bungetsize;	/* make room for Bungets */
 	size -= Bungetsize;
 
 	switch(mode&~(OCEXEC|ORCLOSE|OTRUNC)) {
 	default:
-		fprint(2, "Bopen: unknown mode %d\n", mode);
+		fprint(2, "Binits: unknown mode %d\n", mode);
 		return Beof;
 
 	case OREAD:
 		bp->state = Bractive;
 		bp->ocount = 0;
+		bp->iof = bioread;
 		break;
 
 	case OWRITE:
 		install(bp);
 		bp->state = Bwactive;
 		bp->ocount = -size;
+		bp->iof = biowrite;
 		break;
 	}
 	bp->bbuf = p;
@@ -87,6 +95,7 @@ Binits(Biobuf *bp, int f, int mode, unsigned char *p, int size)
 	bp->rdline = 0;
 	bp->offset = 0;
 	bp->runesize = 0;
+	bp->errorf = nil;
 	return 0;
 }
 
@@ -98,15 +107,19 @@ Binit(Biobuf *bp, int f, int mode)
 }
 
 Biobuf*
-Bfdopen(int f, int mode)
+Bfdopen(int fd, int mode)
 {
 	Biobuf *bp;
 
 	bp = malloc(sizeof(Biobuf));
-	if(bp == 0)
-		return 0;
-	Binits(bp, f, mode, bp->b, sizeof(bp->b));
-	bp->flag = Bmagic;
+	if(bp == nil)
+		return nil;
+	if(Binits(bp, fd, mode, bp->b, sizeof(bp->b)) != 0){
+		free(bp);
+		return nil;
+	}
+	bp->flag = Bmagic;			/* mark bp open & malloced */
+	setmalloctag(bp, getcallerpc(&fd));
 	return bp;
 }
 
@@ -114,42 +127,55 @@ Biobuf*
 Bopen(char *name, int mode)
 {
 	Biobuf *bp;
-	int f;
+	int fd;
 
 	switch(mode&~(OCEXEC|ORCLOSE|OTRUNC)) {
 	default:
-		fprint(2, "Bopen: unknown mode %d\n", mode);
-		return 0;
-
+		fprint(2, "Bopen: unknown mode %#x\n", mode);
+		return nil;
 	case OREAD:
-		f = open(name, mode);
-		if(f < 0)
-			return 0;
+		fd = open(name, mode);
 		break;
-
 	case OWRITE:
-		f = create(name, mode, 0666);
-		if(f < 0)
-			return 0;
+		fd = create(name, mode, 0666);
+		break;
 	}
-	bp = Bfdopen(f, mode);
-	if(bp == 0)
-		close(f);
+	if(fd < 0)
+		return nil;
+	bp = Bfdopen(fd, mode);
+	if(bp == nil){
+		close(fd);
+		return nil;
+	}
+	setmalloctag(bp, getcallerpc(&name));
 	return bp;
 }
 
 int
 Bterm(Biobuf *bp)
 {
-	int ret;
+	int r;
 
 	deinstall(bp);
-	ret = Bflush(bp);
+	r = Bflush(bp);
 	if(bp->flag == Bmagic) {
 		bp->flag = 0;
-		if(close(bp->fid) < 0)
-			ret = -1;
+		close(bp->fid);
+		bp->fid = -1;			/* prevent accidents */
 		free(bp);
 	}
-	return ret;
+	/* otherwise opened with Binit(s) */
+	return r;
+}
+
+void
+Biofn(Biobuf *bp, int (*f)(Biobuf *, void *, long))
+{
+	if(f == nil)
+		if(bp->state == Bwactive)
+			bp->iof = biowrite;
+		else
+			bp->iof = bioread;
+	else
+		bp->iof = f;
 }

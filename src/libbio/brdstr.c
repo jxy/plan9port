@@ -2,12 +2,13 @@
 #include	<bio.h>
 
 static char*
-badd(char *p, int *np, char *data, int ndata, int delim, int nulldelim)
+badd(char *oldp, int *np, char *data, int ndata, int delim, int nulldelim)
 {
 	int n;
+	char *p;
 
 	n = *np;
-	p = realloc(p, n+ndata+1);
+	p = realloc(oldp, n+ndata+1);
 	if(p){
 		memmove(p+n, data, ndata);
 		n += ndata;
@@ -16,7 +17,8 @@ badd(char *p, int *np, char *data, int ndata, int delim, int nulldelim)
 		else
 			p[n] = '\0';
 		*np = n;
-	}
+	}else
+		free(oldp);
 	return p;
 }
 
@@ -48,7 +50,8 @@ Brdstr(Biobuf *bp, int delim, int nulldelim)
 	if(ep) {
 		j = (ep - ip) + 1;
 		bp->icount += j;
-		return badd(nil, &bp->rdline, ip, j, delim, nulldelim);
+		p = badd(nil, &bp->rdline, ip, j, delim, nulldelim);
+		goto out;
 	}
 
 	/*
@@ -65,9 +68,11 @@ Brdstr(Biobuf *bp, int delim, int nulldelim)
 	for(;;){
 		ip = (char*)bp->bbuf + i;
 		while(i < bp->bsize) {
-			j = read(bp->fid, ip, bp->bsize-i);
+			j = bp->iof(bp, ip, bp->bsize-i);
+			if(j < 0)
+				Berror(bp, "read error: %r");
 			if(j <= 0 && i == 0)
-				return p;
+				goto out;
 			if(j <= 0 && i > 0){
 				/*
 				 * end of file but no delim. pretend we got a delim
@@ -91,15 +96,16 @@ Brdstr(Biobuf *bp, int delim, int nulldelim)
 				ip = (char*)bp->ebuf - i;
 				if(i < bp->bsize){
 					memmove(ip, bp->bbuf, i);
-					bp->gbuf = (unsigned char*)ip;
+					bp->gbuf = (uchar*)ip;
 				}
 				j = (ep - (char*)bp->bbuf) + 1;
 				bp->icount = j - i;
-				return badd(p, &bp->rdline, ip, j, delim, nulldelim);
+				p = badd(p, &bp->rdline, ip, j, delim, nulldelim);
+				goto out;
 			}
 			ip += j;
 		}
-
+	
 		/*
 		 * full buffer without finding; add to user string and continue
 		 */
@@ -108,4 +114,7 @@ Brdstr(Biobuf *bp, int delim, int nulldelim)
 		bp->icount = 0;
 		bp->gbuf = bp->ebuf;
 	}
+out:
+	setmalloctag(p, getcallerpc(&bp));
+	return p;
 }

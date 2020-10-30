@@ -159,6 +159,7 @@ echo cd `pwd`
 9c  bgetrune.c
 9c  bgetd.c
 9c  binit.c
+9c  blethal.c
 9c  boffset.c
 9c  bprint.c
 9c  bputc.c

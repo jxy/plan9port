@@ -7,9 +7,10 @@ OFILES=\
 	bfildes.$O\
 	bflush.$O\
 	bgetc.$O\
-	bgetrune.$O\
 	bgetd.$O\
+	bgetrune.$O\
 	binit.$O\
+	blethal.$O\
 	boffset.$O\
 	bprint.$O\
 	bputc.$O\

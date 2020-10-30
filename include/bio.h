@@ -15,7 +15,7 @@ typedef	struct	Biobuf	Biobuf;
 enum
 {
 	Bsize		= 8*1024,
-	Bungetsize	= 4,		/* space for ungetc */
+	Bungetsize	= UTFmax+1,	/* space for ungetc */
 	Bmagic		= 0x314159,
 	Beof		= -1,
 	Bbad		= -2,
@@ -24,8 +24,6 @@ enum
 	Bractive,
 	Bwactive,
 	Bracteof,
-
-	Bend
 };
 
 struct	Biobuf
@@ -37,53 +35,50 @@ struct	Biobuf
 	int	state;		/* r/w/inactive */
 	int	fid;		/* open file */
 	int	flag;		/* magic if malloc'ed */
-	long long	offset;		/* offset of buffer in file */
+	vlong	offset;		/* offset of buffer in file */
 	int	bsize;		/* size of buffer */
-	unsigned char*	bbuf;		/* pointer to beginning of buffer */
-	unsigned char*	ebuf;		/* pointer to end of buffer */
-	unsigned char*	gbuf;		/* pointer to good data in buf */
-	unsigned char	b[Bungetsize+Bsize];
+	uchar*	bbuf;		/* pointer to beginning of buffer */
+	uchar*	ebuf;		/* pointer to end of buffer */
+	uchar*	gbuf;		/* pointer to good data in buf */
+	void	(*errorf)(char *);	/* called on error if not nil */
+	int	(*iof)(Biobuf*, void *, long);	/* called to do i/o */
+	uchar	b[Bungetsize+Bsize];
 };
 
-#define	BGETC(bp)\
-	((bp)->icount?(bp)->bbuf[(bp)->bsize+(bp)->icount++]:Bgetc((bp)))
-#define	BPUTC(bp,c)\
-	((bp)->ocount?(bp)->bbuf[(bp)->bsize+(bp)->ocount++]=(c),0:Bputc((bp),(c)))
-#define	BOFFSET(bp)\
-	(((bp)->state==Bractive)?\
-		(bp)->offset + (bp)->icount:\
-	(((bp)->state==Bwactive)?\
-		(bp)->offset + ((bp)->bsize + (bp)->ocount):\
-		-1))
-#define	BLINELEN(bp)\
-	(bp)->rdline
-#define	BFILDES(bp)\
-	(bp)->fid
+/* Dregs, redefined as functions for backwards compatibility */
+#define	BGETC(bp)	Bgetc(bp)
+#define	BPUTC(bp,c)	Bputc(bp,c)
+#define	BOFFSET(bp)	Boffset(bp)
+#define	BLINELEN(bp)	Blinelen(bp)
+#define	BFILDES(bp)	Bfildes(bp)
 
 int	Bbuffered(Biobuf*);
-Biobuf*	Bfdopen(int, int);
 int	Bfildes(Biobuf*);
 int	Bflush(Biobuf*);
 int	Bgetc(Biobuf*);
 int	Bgetd(Biobuf*, double*);
 long	Bgetrune(Biobuf*);
 int	Binit(Biobuf*, int, int);
-int	Binits(Biobuf*, int, int, unsigned char*, int);
+int	Binits(Biobuf*, int, int, uchar*, int);
 int	Blinelen(Biobuf*);
-long long	Boffset(Biobuf*);
+vlong	Boffset(Biobuf*);
 Biobuf*	Bopen(char*, int);
+Biobuf*	Bfdopen(int, int);
 int	Bprint(Biobuf*, char*, ...);
+int	Bvprint(Biobuf*, char*, va_list);
 int	Bputc(Biobuf*, int);
 int	Bputrune(Biobuf*, long);
 void*	Brdline(Biobuf*, int);
 char*	Brdstr(Biobuf*, int, int);
 long	Bread(Biobuf*, void*, long);
-long long	Bseek(Biobuf*, long long, int);
+vlong	Bseek(Biobuf*, vlong, int);
 int	Bterm(Biobuf*);
 int	Bungetc(Biobuf*);
 int	Bungetrune(Biobuf*);
 long	Bwrite(Biobuf*, void*, long);
-int	Bvprint(Biobuf*, char*, va_list);
+void	Blethal(Biobuf*, void(*)(char*));
+void	Berror(Biobuf*, char*, ...);
+void	Biofn(Biobuf*, int(*)(Biobuf*, void*, long));
 
 #if defined(__cplusplus)
 }

@@ -5,7 +5,7 @@ long
 Bread(Biobuf *bp, void *ap, long count)
 {
 	long c;
-	unsigned char *p;
+	uchar *p;
 	int i, n, ic;
 
 	p = ap;
@@ -19,11 +19,13 @@ Bread(Biobuf *bp, void *ap, long count)
 		if(n == 0) {
 			if(bp->state != Bractive)
 				break;
-			i = read(bp->fid, bp->bbuf, bp->bsize);
+			i = bp->iof(bp, bp->bbuf, bp->bsize);
 			if(i <= 0) {
 				bp->state = Bracteof;
-				if(i < 0)
+				if(i < 0) {
+					Berror(bp, "read error: %r");
 					bp->state = Binactive;
+				}
 				break;
 			}
 			bp->gbuf = bp->bbuf;
@@ -41,5 +43,7 @@ Bread(Biobuf *bp, void *ap, long count)
 		p += n;
 	}
 	bp->icount = ic;
+	if(count == c && bp->state == Binactive)
+		return -1;
 	return count-c;
 }

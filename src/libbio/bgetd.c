@@ -1,4 +1,4 @@
-#include "lib9.h"
+#include	"lib9.h"
 #include <bio.h>
 
 struct	bgetd
@@ -27,7 +27,7 @@ Bgetd(Biobuf *bp, double *dp)
 
 	b.b = bp;
 	b.eof = 0;
-	d = fmtcharstod(Bgetdf, &b);
+	d = charstod(Bgetdf, &b);
 	if(b.eof)
 		return -1;
 	Bungetc(bp);

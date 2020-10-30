@@ -45,7 +45,9 @@ Brdline(Biobuf *bp, int delim)
 	 */
 	ip = (char*)bp->bbuf + i;
 	while(i < bp->bsize) {
-		j = read(bp->fid, ip, bp->bsize-i);
+		j = bp->iof(bp, ip, bp->bsize-i);
+		if(j < 0)
+			Berror(bp, "read error: %r");
 		if(j <= 0) {
 			/*
 			 * end of file with no delim
@@ -67,7 +69,7 @@ Brdline(Biobuf *bp, int delim)
 			ip = (char*)bp->ebuf - i;
 			if(i < bp->bsize){
 				memmove(ip, bp->bbuf, i);
-				bp->gbuf = (unsigned char*)ip;
+				bp->gbuf = (uchar*)ip;
 			}
 			j = (ep - (char*)bp->bbuf) + 1;
 			bp->rdline = j;

@@ -4,8 +4,8 @@
 int
 Bprint(Biobuf *bp, char *fmt, ...)
 {
-	int n;
 	va_list arg;
+	int n;
 
 	va_start(arg, fmt);
 	n = Bvprint(bp, fmt, arg);

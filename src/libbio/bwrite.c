@@ -5,8 +5,9 @@ long
 Bwrite(Biobuf *bp, void *ap, long count)
 {
 	long c;
-	unsigned char *p;
+	uchar *p;
 	int i, n, oc;
+	char errbuf[ERRMAX];
 
 	p = ap;
 	c = count;
@@ -19,9 +20,14 @@ Bwrite(Biobuf *bp, void *ap, long count)
 		if(n == 0) {
 			if(bp->state != Bwactive)
 				return Beof;
-			i = write(bp->fid, bp->bbuf, bp->bsize);
+			i = bp->iof(bp, bp->bbuf, bp->bsize);
 			if(i != bp->bsize) {
-				bp->state = Binactive;
+				errstr(errbuf, sizeof errbuf);
+				if(strstr(errbuf, "interrupt") == nil) {
+					bp->state = Binactive;
+					Berror(bp, "write error: %s", errbuf);
+				}
+				errstr(errbuf, sizeof errbuf);
 				return Beof;
 			}
 			bp->offset += i;
