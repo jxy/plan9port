@@ -170,7 +170,7 @@ echo cd `pwd`
 9c  bseek.c
 9c  bvprint.c
 9c  bwrite.c
-9ar rsc $PLAN9/lib/libbio.a bbuffered.o bfildes.o bflush.o bgetc.o bgetrune.o bgetd.o binit.o boffset.o bprint.o bputc.o bputrune.o brdline.o brdstr.o bread.o bseek.o bvprint.o bwrite.o
+9ar rsc $PLAN9/lib/libbio.a bbuffered.o bfildes.o bflush.o bgetc.o bgetrune.o bgetd.o binit.o blethal.o boffset.o bprint.o bputc.o bputrune.o brdline.o brdstr.o bread.o bseek.o bvprint.o bwrite.o
 cd ..
 cd libregexp
 echo cd `pwd`
