@@ -244,6 +244,7 @@ bin/venti/wrarena
 bin/venti/write
 bin/vmount0
 bin/vnfs
+bin/walk
 bin/wc
 bin/win
 bin/xd
