@@ -11,7 +11,7 @@
 
 static FcConfig    *fc;
 static FT_Library  lib;
-static int         dpi = 96;
+static int         dpi = 72;
 
 void
 loadfonts(void)
