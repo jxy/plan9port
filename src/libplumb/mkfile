@@ -5,6 +5,7 @@ OFILES=\
 	event.$O\
 	fid.$O\
 	mesg.$O\
+	plumbsendtext.$O\
 
 HFILES=$PLAN9/include/plumb.h
 
