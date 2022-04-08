@@ -7,23 +7,22 @@ testcrt(mpint **p)
 	CRTpre *crt;
 	CRTres *res;
 	mpint *m, *x, *y;
-	int i;
 
-	fmtinstall('B', mpconv);
+	fmtinstall('B', mpfmt);
 
-	/* get a modulus and a test number */
+	// get a modulus and a test number
 	m = mpnew(1024+160);
 	mpmul(p[0], p[1], m);
 	x = mpnew(1024+160);
 	mpadd(m, mpone, x);
 
-	/* do the precomputation for crt conversion */
+	// do the precomputation for crt conversion
 	crt = crtpre(2, p);
 
-	/* convert x to residues */
+	// convert x to residues
 	res = crtin(crt, x);
 
-	/* convert back */
+	// convert back
 	y = mpnew(1024+160);
 	crtout(crt, res, y);
 	print("x %B\ny %B\n", x, y);
@@ -48,6 +47,6 @@ main(void)
 		mpfree(p[0]);
 		mpfree(p[1]);
 	}
-	print("%d secs with more\n", time(0)-start);
+	print("%ld secs with more\n", time(0)-start);
 	exits(0);
 }

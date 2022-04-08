@@ -14,33 +14,19 @@ vtomp(vlong v, mpint *b)
 	int s;
 	uvlong uv;
 
-	if(b == nil)
-		b = mpnew(VLDIGITS*sizeof(mpdigit));
-	else
-		mpbits(b, VLDIGITS*sizeof(mpdigit));
-	mpassign(mpzero, b);
-	if(v == 0)
-		return b;
-	if(v < 0){
-		b->sign = -1;
-		uv = -v;
-	} else
-		uv = v;
-	for(s = 0; s < VLDIGITS && uv != 0; s++){
+	if(b == nil){
+		b = mpnew(VLDIGITS*Dbits);
+		setmalloctag(b, getcallerpc(&v));
+	}else
+		mpbits(b, VLDIGITS*Dbits);
+	b->sign = (v >> (sizeof(v)*8 - 1)) | 1;
+	uv = v * b->sign;
+	for(s = 0; s < VLDIGITS; s++){
 		b->p[s] = uv;
-	/* !@*$&!@$ gcc gives warnings about the >> here
-	 * when running on 64-bit machines, even though
-	 * it's in dead code.  fake it out with two shifts.
-		if(sizeof(mpdigit) == sizeof(uvlong))
-			uv = 0;
-		else
-			uv >>= sizeof(mpdigit)*8;
-	*/
-		uv >>= sizeof(mpdigit)*4;
-		uv >>= sizeof(mpdigit)*4;
+		uv >>= sizeof(mpdigit)*8;
 	}
 	b->top = s;
-	return b;
+	return mpnorm(b);
 }
 
 vlong
@@ -52,7 +38,6 @@ mptov(mpint *b)
 	if(b->top == 0)
 		return 0LL;
 
-	mpnorm(b);
 	if(b->top > VLDIGITS){
 		if(b->sign > 0)
 			return (vlong)MAXVLONG;
@@ -62,7 +47,7 @@ mptov(mpint *b)
 
 	v = 0ULL;
 	for(s = 0; s < b->top; s++)
-		v |= b->p[s]<<(s*sizeof(mpdigit)*8);
+		v |= (uvlong)b->p[s]<<(s*sizeof(mpdigit)*8);
 
 	if(b->sign > 0){
 		if(v > MAXVLONG)

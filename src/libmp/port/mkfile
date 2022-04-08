@@ -2,11 +2,20 @@
 
 LIB=libmp.a
 FILES=\
+	cnfield\
+	gmfield\
+	mpfield\
+	mplogic\
+	mpmodop\
+	mpnrand\
+	mpsel\
 	mpaux\
 	mpfmt\
 	strtomp\
 	mptobe\
+	mptober\
 	mptole\
+	mptolel\
 	betomp\
 	letomp\
 	mpadd\
@@ -20,6 +29,7 @@ FILES=\
 	mpvecsub\
 	mpvecdigmuladd\
 	mpveccmp\
+	mpvectscmp\
 	mpdigdiv\
 	mpdiv\
 	mpexp\
