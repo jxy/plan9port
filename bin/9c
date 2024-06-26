@@ -18,6 +18,9 @@ usegcc()
 		-Wno-stringop-truncation \
 		-Wno-stringop-overflow \
 		-Wno-format-truncation \
+		-Wno-deprecated-pragma \
+		-Wno-unused-but-set-variable \
+		-Wno-deprecated-declarations \
 		-fno-omit-frame-pointer \
 		-fsigned-char \
 		-fcommon \
@@ -78,6 +81,8 @@ useclang()
 		-Wno-array-bounds \
 		-Wno-unneeded-internal-declaration \
 		-Wno-misleading-indentation \
+		-Wno-deprecated-pragma \
+		-Wno-unused-but-set-variable \
 		-fsigned-char \
 		-fno-caret-diagnostics \
 		-fcommon \
