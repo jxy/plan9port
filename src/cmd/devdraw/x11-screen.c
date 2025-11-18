@@ -1342,10 +1342,33 @@ _xtoplan9mouse(Xwin *w, XEvent *e, Mouse *m)
 void
 rpc_setmouse(Client *client, Point p)
 {
+	static XCursor empty_cursor;
 	Xwin *w = (Xwin*)client->view;
 
 	xlock();
+	// XWayland hack - hide cursor before warping
+	// see https://github.com/libsdl-org/SDL/issues/9539
+	if(!empty_cursor){
+		Pixmap bm;
+		XColor black;
+		char bmd[] = { 0 };
+		bm = XCreateBitmapFromData(_x.display, w->drawable, bmd, 1, 1);
+		if(bm){
+			empty_cursor = XCreatePixmapCursor(_x.display, bm, bm, &black, &black, 0, 0);
+			XFreePixmap(_x.display, bm);
+		}
+	}
+
+	if(empty_cursor){
+		XDefineCursor(_x.display, w->drawable, empty_cursor);
+		XFlush(_x.display);
+	}
+
 	XWarpPointer(_x.display, None, w->drawable, 0, 0, 0, 0, p.x, p.y);
+
+	if(empty_cursor)
+		XDefineCursor(_x.display, w->drawable, _x.cursor);
+
 	XFlush(_x.display);
 	xunlock();
 }
@@ -1589,8 +1612,9 @@ if(0) fprint(2, "xselect target=%d requestor=%d property=%d selection=%d (sizeof
 	|| xe->target == _x.utf8string
 	|| xe->target == _x.text
 	|| xe->target == _x.compoundtext
-	|| ((name = XGetAtomName(_x.display, xe->target)) && strcmp(name, "text/plain;charset=UTF-8") == 0)){
+	|| ((name = XGetAtomName(_x.display, xe->target)) && strcasecmp(name, "text/plain;charset=UTF-8") == 0)){
 		/* text/plain;charset=UTF-8 seems nonstandard but is used by Synergy */
+		/* text/plain;charset=utf-8 is used by xfce4-terminal 1.0.4 */
 		/* if the target is STRING we're supposed to reply with Latin1 XXX */
 		qlock(&clip.lk);
 		XChangeProperty(_x.display, xe->requestor, xe->property, xe->target,
