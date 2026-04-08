@@ -32,7 +32,7 @@ sha2_384(uchar *p, ulong len, uchar *digest, SHA2_384state *s)
 		 * seed the state with the first 64 bits of the fractional
 		 * parts of the square roots of the 9th thru 16th primes.
 		 */
- 		s->bstate[0] = 0xcbbb9d5dc1059ed8LL;
+		s->bstate[0] = 0xcbbb9d5dc1059ed8LL;
 		s->bstate[1] = 0x629a292a367cd507LL;
 		s->bstate[2] = 0x9159015a3070dd17LL;
 		s->bstate[3] = 0x152fecd8f70e5939LL;
@@ -60,7 +60,7 @@ sha2_512(uchar *p, ulong len, uchar *digest, SHA2_512state *s)
 		 * seed the state with the first 64 bits of the fractional
 		 * parts of the square roots of the first 8 primes 2..19).
 		 */
- 		s->bstate[0] = 0x6a09e667f3bcc908LL;
+		s->bstate[0] = 0x6a09e667f3bcc908LL;
 		s->bstate[1] = 0xbb67ae8584caa73bLL;
 		s->bstate[2] = 0x3c6ef372fe94f82bLL;
 		s->bstate[3] = 0xa54ff53a5f1d36f1LL;

@@ -160,15 +160,15 @@ enum
 typedef struct DigestState DigestState;
 struct DigestState
 {
-	uvlong	len;
+	ulong len;
 	union {
 		u32int	state[8];
 		u64int	bstate[8];
 	};
-	uchar	buf[256];
-	int	blen;
-	char	malloced;
-	char	seeded;
+	uchar buf[256];
+	int blen;
+	char malloced;
+	char seeded;
 };
 typedef struct DigestState SHAstate;	/* obsolete name */
 typedef struct DigestState SHA1state;
@@ -180,29 +180,23 @@ typedef struct DigestState MD5state;
 typedef struct DigestState MD4state;
 typedef struct DigestState AEShstate;
 
-DigestState*	md4(uchar*, ulong, uchar*, DigestState*);
-DigestState*	md5(uchar*, ulong, uchar*, DigestState*);
-DigestState*	sha1(uchar*, ulong, uchar*, DigestState*);
-DigestState*	sha2_224(uchar*, ulong, uchar*, DigestState*);
-DigestState*	sha2_256(uchar*, ulong, uchar*, DigestState*);
-DigestState*	sha2_384(uchar*, ulong, uchar*, DigestState*);
-DigestState*	sha2_512(uchar*, ulong, uchar*, DigestState*);
-DigestState*	aes(uchar*, ulong, uchar*, DigestState*);
-DigestState*	hmac_x(uchar *p, ulong len, uchar *key, ulong klen,
-			uchar *digest, DigestState *s,
-			DigestState*(*x)(uchar*, ulong, uchar*, DigestState*),
-			int xlen);
-DigestState*	hmac_md5(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
-DigestState*	hmac_sha1(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
-DigestState*	hmac_sha2_224(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
-DigestState*	hmac_sha2_256(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
-DigestState*	hmac_sha2_384(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
-DigestState*	hmac_sha2_512(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
-DigestState*	hmac_aes(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
-char*		md5pickle(MD5state*);
-MD5state*	md5unpickle(char*);
-char*		sha1pickle(SHA1state*);
-SHA1state*	sha1unpickle(char*);
+DigestState* md4(uchar*, ulong, uchar*, DigestState*);
+DigestState* md5(uchar*, ulong, uchar*, DigestState*);
+DigestState* sha1(uchar*, ulong, uchar*, DigestState*);
+DigestState* sha2_224(uchar*, ulong, uchar*, DigestState*);
+DigestState* sha2_256(uchar*, ulong, uchar*, DigestState*);
+DigestState* sha2_384(uchar*, ulong, uchar*, DigestState*);
+DigestState* sha2_512(uchar*, ulong, uchar*, DigestState*);
+DigestState* hmac_md5(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
+DigestState* hmac_sha1(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
+DigestState* hmac_sha2_224(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
+DigestState* hmac_sha2_256(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
+DigestState* hmac_sha2_384(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
+DigestState* hmac_sha2_512(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
+DigestState* hmac_x(uchar*, ulong, uchar*, ulong, uchar*, DigestState*,
+	DigestState*(*)(uchar*, ulong, uchar*, DigestState*), int);
+char* sha1pickle(SHA1state*);
+SHA1state* sha1unpickle(char*);
 
 /*
  * random number generation

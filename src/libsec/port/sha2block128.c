@@ -71,7 +71,7 @@ _sha2block128(uchar *p, ulong len, u64int *s)
 
 			s0 = sigma0(wp[-15]);
 			s1 = sigma1(wp[-2]);
-/*			wp[0] = sigma1(wp[-2]) + wp[-7] + sigma0(wp[-15]) + wp[-16]; */
+//			wp[0] = sigma1(wp[-2]) + wp[-7] + sigma0(wp[-15]) + wp[-16];
 			wp[0] = s1 + wp[-7] + s0 + wp[-16];
 		}
 
